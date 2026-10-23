@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Auth\PasswordController;
+use App\Http\Controllers\Api\Kiosk\KatalogController;
+use App\Http\Controllers\Api\Kiosk\PeminjamanController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -19,4 +21,9 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'admin.aktif'])->group(funct
     Route::get('ping', fn () => response()->json(['ok' => true]));
 });
 
-// Rute kiosk ditambahkan di Fase 2.
+Route::prefix('kiosk')->group(function () {
+    Route::get('katalog', [KatalogController::class, 'index']);
+    Route::get('kategori', [KatalogController::class, 'kategori']);
+    Route::get('divisi', [KatalogController::class, 'divisi']);
+    Route::post('peminjaman', [PeminjamanController::class, 'store']);
+});
