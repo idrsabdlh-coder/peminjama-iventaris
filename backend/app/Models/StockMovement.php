@@ -2,22 +2,23 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-
-class StockMovement extends Model
+class StockMovement extends ModelDasar
 {
-    use HasFactory;
-
     protected $fillable = [
-        'barang_id',
-        'loan_id',
-        'tipe_aksi',
-        'perubahan_tersedia',
-        'perubahan_dipinjam',
-        'perubahan_menunggu',
-        'perubahan_rusak',
-        'perubahan_total',
-        'keterangan',
+        'item_id', 'jenis', 'delta_total', 'delta_tersedia', 'delta_rusak',
+        'ref_tipe', 'ref_id', 'user_id', 'catatan',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'delta_total' => 'integer',
+            'delta_tersedia' => 'integer',
+            'delta_rusak' => 'integer',
+            'dibuat_pada' => 'datetime',
+        ];
+    }
+
+    public function item() { return $this->belongsTo(Item::class, 'item_id')->withTrashed(); }
+    public function admin() { return $this->belongsTo(User::class, 'user_id'); }
 }

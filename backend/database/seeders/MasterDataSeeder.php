@@ -2,70 +2,42 @@
 
 namespace Database\Seeders;
 
+use App\Models\Category;
+use App\Models\Division;
+use App\Models\Setting;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Carbon;
 
 class MasterDataSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
+    /** Aman dijalankan berulang: data yang sudah ada tidak ditimpa. */
     public function run(): void
     {
-        $now = Carbon::now('Asia/Jakarta');
-
-        // 1. Akun Admin Pertama (FR-A-01, FR-A-02)
-        DB::table('users')->updateOrInsert(
-            ['email' => 'admin@it.local'],
-            [
-                'name' => 'Petugas IT Inventaris',
-                'password' => Hash::make('password123'),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]
-        );
-
-        // 2. Data Master Divisi Aktif (BR-27)
-        $divisidata = [
-            ['nama' => 'IT Support', 'is_active' => true],
-            ['nama' => 'Software Engineering', 'is_active' => true],
-            ['nama' => 'HRD & GA', 'is_active' => true],
-            ['nama' => 'Keuangan', 'is_active' => true],
-            ['nama' => 'Redaksi / Konten', 'is_active' => true],
-            ['nama' => 'Pemasaran', 'is_active' => true],
-        ];
-
-        foreach ($divisidata as $divisi) {
-            DB::table('divisis')->updateOrInsert(
-                ['nama' => $divisi['nama']],
-                [
-                    'is_active' => $divisi['is_active'],
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]
-            );
+        foreach ([
+            'IT Support', 'Software Engineering', 'HRD & GA',
+            'Keuangan', 'Redaksi / Konten', 'Pemasaran',
+        ] as $nama) {
+            Division::firstOrCreate(['nama' => $nama], ['aktif' => true]);
         }
 
-        // 3. Data Master Kategori Barang (BR-28)
-        $kategoriData = [
-            ['nama' => 'Laptop / Komputer', 'is_active' => true],
-            ['nama' => 'Monitor & Display', 'is_active' => true],
-            ['nama' => 'Aksesori & Periferal', 'is_active' => true],
-            ['nama' => 'Jaringan & Kabel', 'is_active' => true],
-            ['nama' => 'Proyektor & Presentasi', 'is_active' => true],
-        ];
+        foreach ([
+            'Tanpa Kategori', 'Laptop / Komputer', 'Monitor & Display',
+            'Aksesori & Periferal', 'Jaringan & Kabel', 'Proyektor & Presentasi',
+        ] as $nama) {
+            Category::firstOrCreate(['nama' => $nama], ['aktif' => true]);
+        }
 
-        foreach ($kategoriData as $kategori) {
-            DB::table('kategoris')->updateOrInsert(
-                ['nama' => $kategori['nama']],
-                [
-                    'is_active' => $kategori['is_active'],
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]
-            );
+        foreach ([
+            'maks_durasi_awal_hari' => 7,
+            'maks_perpanjangan' => 2,
+            'maks_hari_per_perpanjangan' => 7,
+            'maks_booking_hari' => 7,
+            'sesi_idle_menit' => 15,
+            'kiosk_idle_detik' => 60,
+            'kiosk_lookup_maks_gagal' => 5,
+            'kiosk_lookup_kunci_menit' => 5,
+        ] as $kunci => $nilai) {
+            // Kembalikan ke 'kunci' dan 'nilai'
+            Setting::firstOrCreate(['kunci' => $kunci], ['nilai' => (string) $nilai]);
         }
     }
 }
