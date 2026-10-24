@@ -91,8 +91,15 @@ class PeminjamanService
         }, 3); // diulang otomatis bila terjadi deadlock
     }
 
-    /** Data untuk struk dan respons kiosk. Telepon sengaja tidak disertakan (BR-18). */
-        /** Kartu peminjaman untuk kiosk. Telepon sengaja tidak disertakan (BR-18). */
+    /** Data untuk struk dan respons kiosk, dicari lewat id. Telepon tidak disertakan (BR-18). */
+    public function tampilkan(int $id): array
+    {
+        $kode = DB::table('loans')->where('id', $id)->value('kode_pinjam');
+
+        return $this->kartuByKode($kode);
+    }
+
+    /** Kartu peminjaman untuk kiosk. Telepon sengaja tidak disertakan (BR-18). */
     public function kartuByKode(string $kode): ?array
     {
         $loan = DB::table('loans')

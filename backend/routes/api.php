@@ -2,15 +2,13 @@
 
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Auth\PasswordController;
+use App\Http\Controllers\Api\Kiosk\CekPeminjamanController;
 use App\Http\Controllers\Api\Kiosk\KatalogController;
 use App\Http\Controllers\Api\Kiosk\PeminjamanController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\Kiosk\CekPeminjamanController;
-
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [LoginController::class, 'store']);
-    Route::post('peminjaman/cek', CekPeminjamanController::class);
 
     Route::middleware(['auth:sanctum', 'admin.aktif'])->group(function () {
         Route::post('logout', [LoginController::class, 'destroy']);
@@ -29,4 +27,5 @@ Route::prefix('kiosk')->group(function () {
     Route::get('kategori', [KatalogController::class, 'kategori']);
     Route::get('divisi', [KatalogController::class, 'divisi']);
     Route::post('peminjaman', [PeminjamanController::class, 'store']);
+    Route::post('peminjaman/cek', CekPeminjamanController::class);
 });

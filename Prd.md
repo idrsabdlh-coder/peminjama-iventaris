@@ -60,7 +60,7 @@ Aturan kerja: **fase berikutnya baru dimulai setelah gerbang (gate) fase sebelum
 **Tujuan.** Memastikan lingkungan dan keputusan awal beres sebelum menulis kode.
 
 **Yang dikerjakan**
-- Verifikasi koneksi MySQL 8.4 di PHPBRPO ke database `iventaris_db`.
+- Verifikasi koneksi MySQL 8.4 di PHPBRPO ke database `inventaris_db`.
 - Konfirmasi stack (Laravel + Vue) ke pemilik repo dan pengembang lain. AGENTS.md repo mewajibkan ini.
 - Putuskan cara menjalankan aplikasi: Herd, PHPBRPO, atau `php artisan serve`, lalu catat di panduan setup.
 - Jawab pertanyaan terbuka PRD: pembagian MVP, nilai kebijakan, data lama, target kinerja.

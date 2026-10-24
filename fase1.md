@@ -3,7 +3,7 @@
 ## 1️⃣ Perbaikan konfigurasi
 | Item | Lokasi | Perubahan |
 |------|--------|-----------|
-| `.env.example` | `backend/.env.example` | - `DB_CONNECTION=mysql`<br>- `DB_HOST=127.0.0.1`<br>- `DB_DATABASE=iventaris_db`<br>- `DB_USERNAME=root`<br>- `DB_PASSWORD=` (kosong atau sesuai dev env)<br>- `SESSION_LIFETIME=15`<br>- `APP_LOCALE=id`<br>- **Hapus** semua variabel antrean (`QUEUE_CONNECTION`, dsb.) |
+| `.env.example` | `backend/.env.example` | - `DB_CONNECTION=mysql`<br>- `DB_HOST=127.0.0.1`<br>- `DB_DATABASE=inventaris_db`<br>- `DB_USERNAME=root`<br>- `DB_PASSWORD=` (kosong atau sesuai dev env)<br>- `SESSION_LIFETIME=15`<br>- `APP_LOCALE=id`<br>- **Hapus** semua variabel antrean (`QUEUE_CONNECTION`, dsb.) |
 | `config/app.php` | `backend/config/app.php` | Set `timezone` ke `'UTC'` |
 
 ## 2️⃣ Migration
@@ -16,7 +16,7 @@ php artisan migrate:reset --path=database/migrations
 ### 2.2 Buat migration 11 tabel domain
 ```powershell
 php artisan make:migration create_divisions_table --create=divisions
-php artisan make:migration create_categories_table --create=categories
+php artisan make:migration create_kategoris_table --create=kategoris
 php artisan make:migration create_items_table --create=items
 php artisan make:migration create_loans_table --create=loans
 php artisan make:migration create_audit_logs_table --create=audit_logs
@@ -32,7 +32,7 @@ php artisan make:migration create_user_division_table --create=user_division
 Schema::create('items', function (Blueprint $table) {
     $table->id();
     $table->string('name');
-    $table->foreignId('category_id')->constrained()->cascadeOnDelete();
+    $table->foreignId('category_id')->constrained('kategoris')->cascadeOnDelete();
     $table->foreignId('division_id')->constrained()->cascadeOnDelete();
     $table->integer('total_stock')->default(0);
     $table->integer('available_stock')->default(0);
@@ -189,8 +189,8 @@ public function test_user_can_login_and_logout()
     $response->assertOk()->assertJsonStructure(['token']);
     $token = $response->json('token');
 
-    $this->withHeaders(['Authorization' => "Bearer $token"]) ->getJson('/api/me')->assertOk();
-    $this->withHeaders(['Authorization' => "Bearer $token"]) ->postJson('/api/logout')->assertOk();
+    $this->withHeaders(['Authorization' => "Bearer $token"]).getJson('/api/me')->assertOk();
+    $this->withHeaders(['Authorization' => "Bearer $token"]).postJson('/api/logout')->assertOk();
 }
 ```
 ### 7.2 Test Model Relations & Settings (`tests/Unit/ModelRelationsTest.php`)
@@ -229,7 +229,7 @@ Semua tes harus **green** (coverage > 80 %).
 
 ### 📋 Ringkasan Eksekusi
 1. Update `.env.example` & `config/app.php`.
-2. Hapus migration lama, buat 11 migration baru + pivot.
+2. Hapus migration lama, buat 11 migration baru + pivot (termasuk `kategoris`).
 3. Buat 13 model beserta relasi.
 4. Buat seeder master (8 setting, divisi, kategori, admin).
 5. Implementasi dua artisan command.
@@ -242,7 +242,3 @@ php artisan migrate:fresh --seed
 php artisan test
 ```
 Pastikan semua tes lulus sebelum `git commit`.
-
----
-
-*Jika ada bagian yang ingin Anda ubah atau detail tambahan, beri tahu saya!*

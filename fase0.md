@@ -5,8 +5,9 @@ Menyiapkan lingkungan pengembangan dan keputusan awal sebelum menulis kode sehin
 
 ## ✅ Daftar Pekerjaan (Tasks)
 | No | Kategori | Deskripsi | Status |
+
 |----|----------|-----------|--------|
-| 1 | Infrastruktur | **Verifikasi koneksi MySQL** (versi 8.4) ke database `iventaris_db` pada server lokal (PHPBRPO). | ☐ Belum dimulai |
+| 1 | Infrastruktur | **Verifikasi koneksi MySQL** (versi 8.4) ke database `inventaris_db` pada server lokal (PHPBRPO). | ☐ Belum dimulai |
 | 2 | Infrastruktur | **Pastikan Laravel 10** (atau versi yang dipilih) ter‑install via Composer. | ☐ Belum dimulai |
 | 3 | Infrastruktur | **Install Node.js & Vue 3** untuk frontend, jalankan `npm install`. | ☐ Belum dimulai |
 | 4 | Keputusan | **Pilih cara menjalankan aplikasi**: Herd, PHPBRPO, atau `php artisan serve`. Catat pilihan di `README.md`. | ☐ Belum dimulai |
