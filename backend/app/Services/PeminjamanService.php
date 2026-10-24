@@ -92,22 +92,43 @@ class PeminjamanService
     }
 
     /** Data untuk struk dan respons kiosk. Telepon sengaja tidak disertakan (BR-18). */
-    public function tampilkan(int $id): array
+        /** Kartu peminjaman untuk kiosk. Telepon sengaja tidak disertakan (BR-18). */
+    public function kartuByKode(string $kode): ?array
     {
         $loan = DB::table('loans')
             ->join('divisions', 'divisions.id', '=', 'loans.division_id')
-            ->where('loans.id', $id)
+            ->where('loans.kode_pinjam', $kode)
             ->first(['loans.*', 'divisions.nama as divisi_nama']);
+
+        if (! $loan) {
+            return null;
+        }
 
         $items = DB::table('loan_items')
             ->join('items', 'items.id', '=', 'loan_items.item_id')
-            ->where('loan_items.loan_id', $id)
+            ->where('loan_items.loan_id', $loan->id)
             ->orderBy('items.nama')
             ->get(['items.nama', 'loan_items.qty_dipinjam'])
-            ->map(fn ($i) => ['nama' => $i->nama, 'qty' => (int) $i->qty_dipinjam])
+            ->map(fn ($i) => ['nama' => $i->nama, 'dipinjam' => (int) $i->qty_dipinjam])
             ->all();
 
-        $pemesanan = $loan->tanggal_pinjam > Carbon::today('Asia/Jakarta')->toDateString();
+        $hariIni = Carbon::today('Asia/Jakarta');
+        $pinjam = Carbon::parse($loan->tanggal_pinjam, 'Asia/Jakarta')->startOfDay();
+        $batas = Carbon::parse($loan->batas_kembali, 'Asia/Jakarta')->startOfDay();
+
+        // Selisih hari kalender bertanda: positif bila $batas masih di depan.
+        $selisih = (int) round($hariIni->diffInDays($batas, false));
+
+        // Status diturunkan, tidak disimpan (bagian 7.2). Klaim ditambahkan di task berikutnya.
+        if ($loan->dibatalkan_pada !== null) {
+            $status = 'dibatalkan';
+        } elseif ($pinjam->gt($hariIni)) {
+            $status = 'dipesan';
+        } elseif ($selisih < 0) {
+            $status = 'terlambat';
+        } else {
+            $status = 'dipinjam';
+        }
 
         return [
             'kode_pinjam' => $loan->kode_pinjam,
@@ -116,8 +137,11 @@ class PeminjamanService
             'tipe_peminjam' => $loan->tipe_peminjam,
             'tanggal_pinjam' => $loan->tanggal_pinjam,
             'batas_kembali' => $loan->batas_kembali,
-            'pemesanan' => $pemesanan,
-            'status' => $pemesanan ? 'dipesan' : 'dipinjam',
+            'status' => $status,
+            'pemesanan' => $status === 'dipesan',
+            'boleh_dibatalkan' => $status === 'dipesan', // BR-24
+            'sisa_hari' => max(0, $selisih),
+            'hari_terlambat' => max(0, -$selisih),
             'items' => $items,
         ];
     }
