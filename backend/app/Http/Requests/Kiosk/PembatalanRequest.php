@@ -21,7 +21,7 @@ class PembatalanRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'kode_pinjam' => ['required', 'regex:/^PJM-[A-HJKMNP-Z2-9]{6}$/'],
+            'kode_pinjam' => ['required', 'string', 'max:20'],
             'alasan' => ['nullable', 'string', 'max:500'],
         ];
     }
