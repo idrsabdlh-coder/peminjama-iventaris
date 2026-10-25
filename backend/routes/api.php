@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Kiosk\CekPeminjamanController;
 use App\Http\Controllers\Api\Kiosk\KatalogController;
 use App\Http\Controllers\Api\Kiosk\PeminjamanController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\Kiosk\PembatalanController;
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [LoginController::class, 'store']);
@@ -28,4 +29,5 @@ Route::prefix('kiosk')->group(function () {
     Route::get('divisi', [KatalogController::class, 'divisi']);
     Route::post('peminjaman', [PeminjamanController::class, 'store']);
     Route::post('peminjaman/cek', CekPeminjamanController::class);
+    Route::post('peminjaman/batal', PembatalanController::class);
 });
