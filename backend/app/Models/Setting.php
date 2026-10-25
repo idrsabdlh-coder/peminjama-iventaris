@@ -4,13 +4,7 @@ namespace App\Models;
 
 class Setting extends ModelDasar
 {
-    protected $primaryKey = 'kunci';
-    public $incrementing = false;
-    protected $keyType = 'string';
-    protected $fillable = ['kunci', 'nilai'];
+    public $timestamps = true;
 
-    protected function casts(): array
-    {
-        return ['diubah_pada' => 'datetime'];
-    }
+    protected $fillable = ['kunci', 'nilai'];
 }

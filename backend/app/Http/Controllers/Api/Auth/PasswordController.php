@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +33,12 @@ class PasswordController extends Controller
 
         $user->password = $data['password'];
         $user->save();
+
+        // Hentikan semua sesi lain akun ini; sesi yang sedang dipakai dipertahankan.
+        DB::table('sessions')
+            ->where('user_id', $user->id)
+            ->where('id', '!=', $request->session()->getId())
+            ->delete();
 
         AuditLog::create([
             'user_id' => $user->id,

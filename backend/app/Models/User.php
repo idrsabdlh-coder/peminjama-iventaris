@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -11,24 +10,25 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    public $timestamps = false; // <-- Tambahkan baris ini di sini
+    public $timestamps = false;
 
-    protected $fillable = [
-        'name',
-        'email',
-        'password',
-    ];
+    protected $fillable = ['name', 'email', 'password', 'aktif', 'login_terakhir'];
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    protected $hidden = ['password'];
 
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'aktif' => 'boolean',
+            'login_terakhir' => 'datetime',
+            'dibuat_pada' => 'datetime',
         ];
+    }
+
+    // Tabel users tidak punya kolom remember_token.
+    public function getRememberTokenName()
+    {
+        return '';
     }
 }
