@@ -153,6 +153,71 @@ class PeminjamanService
         ];
     }
 
+    /**
+     * Batalkan pemesanan dari kiosk (BR-24). Idempoten: pembatalan ulang
+     * tidak mengembalikan stok dua kali. Mengembalikan null bila kode tidak ada.
+     */
+    public function batal(string $kode, ?string $alasan = null): ?array
+    {
+        return DB::transaction(function () use ($kode, $alasan) {
+            $loan = DB::table('loans')->where('kode_pinjam', $kode)->lockForUpdate()->first();
+
+            if (! $loan) {
+                return null;
+            }
+
+            if ($loan->dibatalkan_pada !== null) {
+                return $this->kartuByKode($kode);
+            }
+
+            $hariIni = Carbon::today('Asia/Jakarta');
+            $pinjam = Carbon::parse($loan->tanggal_pinjam, 'Asia/Jakarta')->startOfDay();
+
+            if (! $pinjam->gt($hariIni)) {
+                throw ValidationException::withMessages([
+                    'kode_pinjam' => 'Peminjaman yang sudah berjalan tidak bisa dibatalkan dari kiosk. Hubungi admin.',
+                ]);
+            }
+
+            $baris = DB::table('loan_items')->where('loan_id', $loan->id)->orderBy('item_id')->get();
+
+            DB::table('items')->whereIn('id', $baris->pluck('item_id')->all())
+                ->orderBy('id')->lockForUpdate()->get();
+
+            foreach ($baris as $b) {
+                $qty = (int) $b->qty_dipinjam;
+
+                DB::table('items')->where('id', $b->item_id)->increment('tersedia', $qty);
+
+                DB::table('stock_movements')->insert([
+                    'item_id' => $b->item_id,
+                    'jenis' => 'BATAL_PINJAM',
+                    'delta_total' => 0,
+                    'delta_tersedia' => $qty,
+                    'delta_rusak' => 0,
+                    'ref_tipe' => 'loan',
+                    'ref_id' => $loan->id,
+                    'user_id' => null,
+                ]);
+            }
+
+            DB::table('loans')->where('id', $loan->id)->update([
+                'dibatalkan_pada' => now(),
+                'alasan_batal' => $alasan !== null && trim($alasan) !== '' ? trim($alasan) : 'Dibatalkan oleh peminjam',
+                'dibatalkan_oleh' => null,
+            ]);
+
+            DB::table('audit_logs')->insert([
+                'user_id' => null,
+                'aksi' => 'batal_pinjam_kiosk',
+                'entitas' => 'loan',
+                'entitas_id' => $loan->id,
+                'detail' => json_encode(['kode_pinjam' => $kode]),
+            ]);
+
+            return $this->kartuByKode($kode);
+        });
+    }
     private function kodeBaru(): string
     {
         do {
