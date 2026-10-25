@@ -28,6 +28,18 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'admin.aktif'])->group(funct
     Route::post('items', [\App\Http\Controllers\Api\Admin\ItemController::class, 'store']);
     Route::match(['put', 'patch'], 'items/{id}', [\App\Http\Controllers\Api\Admin\ItemController::class, 'update'])->whereNumber('id');
     Route::delete('items/{id}', [\App\Http\Controllers\Api\Admin\ItemController::class, 'destroy'])->whereNumber('id');
+
+    Route::get('categories', [\App\Http\Controllers\Api\Admin\CategoryController::class, 'index']);
+    Route::post('categories', [\App\Http\Controllers\Api\Admin\CategoryController::class, 'store']);
+    Route::get('categories/{id}', [\App\Http\Controllers\Api\Admin\CategoryController::class, 'show'])->whereNumber('id');
+    Route::match(['put', 'patch'], 'categories/{id}', [\App\Http\Controllers\Api\Admin\CategoryController::class, 'update'])->whereNumber('id');
+    Route::delete('categories/{id}', [\App\Http\Controllers\Api\Admin\CategoryController::class, 'destroy'])->whereNumber('id');
+
+    Route::get('divisions', [\App\Http\Controllers\Api\Admin\DivisionController::class, 'index']);
+    Route::post('divisions', [\App\Http\Controllers\Api\Admin\DivisionController::class, 'store']);
+    Route::get('divisions/{id}', [\App\Http\Controllers\Api\Admin\DivisionController::class, 'show'])->whereNumber('id');
+    Route::match(['put', 'patch'], 'divisions/{id}', [\App\Http\Controllers\Api\Admin\DivisionController::class, 'update'])->whereNumber('id');
+    Route::delete('divisions/{id}', [\App\Http\Controllers\Api\Admin\DivisionController::class, 'destroy'])->whereNumber('id');
 });
 
 Route::prefix('kiosk')->group(function () {
