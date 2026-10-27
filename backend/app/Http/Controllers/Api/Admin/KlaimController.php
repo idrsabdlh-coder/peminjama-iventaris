@@ -37,13 +37,13 @@ class KlaimController extends Controller
     public function verifikasi(Request $request, int $id): JsonResponse
     {
         $d = $request->validate([
-            'catatan_admin'         => ['nullable', 'string', 'max:500'],
-            'baris'                 => ['required', 'array', 'min:1'],
-            'baris.*.id'            => ['required', 'integer', 'distinct'],
-            'baris.*.qty_baik'      => ['required', 'integer', 'min:0'],
-            'baris.*.qty_rusak'     => ['required', 'integer', 'min:0'],
-            'baris.*.qty_hilang'    => ['required', 'integer', 'min:0'],
-            'baris.*.qty_ditolak'   => ['required', 'integer', 'min:0'],
+            'catatan_admin'       => ['nullable', 'string', 'max:500'],
+            'baris'               => ['required', 'array', 'min:1'],
+            'baris.*.id'          => ['required', 'integer', 'distinct'],
+            'baris.*.qty_baik'    => ['required', 'integer', 'min:0'],
+            'baris.*.qty_rusak'   => ['required', 'integer', 'min:0'],
+            'baris.*.qty_hilang'  => ['required', 'integer', 'min:0'],
+            'baris.*.qty_ditolak' => ['required', 'integer', 'min:0'],
         ]);
 
         $adminId = $request->user()->id;
@@ -93,9 +93,10 @@ class KlaimController extends Controller
                 ]);
 
                 $p = &$perItem[$line->item_id];
-                $p['baik']   = ($p['baik'] ?? 0) + $k['qty_baik'];
-                $p['rusak']  = ($p['rusak'] ?? 0) + $k['qty_rusak'];
-                $p['hilang'] = ($p['hilang'] ?? 0) + $k['qty_hilang'];
+                $p['baik']    = ($p['baik']    ?? 0) + $k['qty_baik'];
+                // 'kondisi' = jumlah unit yang dikembalikan dalam kondisi rusak/perlu servis
+                $p['kondisi'] = ($p['kondisi'] ?? 0) + $k['qty_rusak'];
+                $p['hilang']  = ($p['hilang']  ?? 0) + $k['qty_hilang'];
                 unset($p);
             }
 
@@ -104,18 +105,18 @@ class KlaimController extends Controller
             foreach ($perItem as $itemId => $v) {
                 DB::table('items')->where('id', $itemId)->lockForUpdate()->first();
 
+                // Perbarui stok: baik kembali ke tersedia, rusak tambah kondisi, hilang kurangi total
                 DB::table('items')->where('id', $itemId)->incrementEach([
                     'tersedia' => $v['baik'],
-                    'rusak'    => $v['rusak'],
+                    'kondisi'  => $v['kondisi'],
                     'total'    => -$v['hilang'],
                 ]);
 
                 $gerak = [
-                    ['VERIFIKASI_BAIK',   0,              $v['baik'], 0,           $v['baik']],
-                    ['VERIFIKASI_RUSAK',  0,              0,          $v['rusak'], $v['rusak']],
-                    ['VERIFIKASI_HILANG', -$v['hilang'],  0,          0,           $v['hilang']],
-                    ];
-                
+                    ['VERIFIKASI_BAIK',   0,             $v['baik'],    0,             $v['baik']],
+                    ['VERIFIKASI_RUSAK',  0,             0,             $v['kondisi'], $v['kondisi']],
+                    ['VERIFIKASI_HILANG', -$v['hilang'], 0,             0,             $v['hilang']],
+                ];
 
                 foreach ($gerak as [$jenis, $dTotal, $dTersedia, $dRusak, $cek]) {
                     if ($cek === 0) {
@@ -127,7 +128,7 @@ class KlaimController extends Controller
                         'jenis'          => $jenis,
                         'delta_total'    => $dTotal,
                         'delta_tersedia' => $dTersedia,
-                        'delta_rusak'    => $dRusak,
+                        'delta_rusak'    => $dRusak,   // kolom buku besar tetap delta_rusak
                         'ref_tipe'       => 'klaim',
                         'ref_id'         => $id,
                         'user_id'        => $adminId,

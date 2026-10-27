@@ -1,234 +1,96 @@
-# Phase 3 – Penyelesaian & Optimasi (PRD)
+# Fase 3 – Frontend Kiosk (Layar Sentuh Peminjam)
 
-Setelah fase 1 (setup dasar) dan fase 2 (fitur bisnis) selesai, fase 3 berfokus pada:
-- Penyempurnaan UI/UX SPA
-- Optimasi performa & keamanan
-- Dokumentasi & CI/CD
-- Monitoring & observability
-- Release & rollback strategy
+Dokumen ini merupakan panduan pelaksanaan **Fase 3** yang diturunkan secara langsung dari **[Prd (1).md](file:///C:/Users/HP/Documents/magang/Peminjaman-iventaris/Prd%20(1).md)** dan **[fase.md](file:///C:/Users/HP/Documents/magang/Peminjaman-iventaris/fase.md)**.
 
 ---
 
-## 🎯 Tujuan Utama fase 3
-| # | Target | Deskripsi |
-|---|--------|-----------|
-| 3.1 | **SPA Front‑end** (Vue/React) | Integrasi API yang sudah dibangun, tampilan daftar barang, peminjaman, riwayat, dan dashboard admin. |
-| 3.2 | **Role‑Based UI** | Admin dapat mengelola Setting, User, dan laporan; Operator hanya dapat meminjam/kembalikan. |
-| 3.3 | **Performance Tuning** | Caching (Redis) untuk laporan stok, eager loading pada query, dan pagination. |
-| 3.4 | **Security Harden** | Rate‑limiting, CORS whitelist, CSP, audit log retention, dan token revocation endpoint. |
-| 3.5 | **Testing End‑to‑End** | Cypress / Playwright skenario lengkap (login → pinjam → kembali → logout). |
-| 3.6 | **CI/CD Pipeline** | GitHub Actions workflow menjalankan PHPStan, PHPUnit, linting front‑end, dan deploy ke staging. |
-| 3.7 | **Monitoring** | Laravel Telescope & Horizon (jika queue di‑aktifkan), serta Health check endpoint. |
-| 3.8 | **Rollback & Backup** | Skrip migration rollback, DB dump otomatis, dan strategi blue‑green deploy. |
+## 🎯 Tujuan Fase
+Membangun antarmuka frontend **mode Kiosk** berbasis layar sentuh (tablet/PC kiosk) menggunakan Vue 3, Vite, dan Tailwind CSS:
+1. Peminjam dapat mencari barang, mengajukan peminjaman langsung, dan mengecek status peminjaman secara mandiri tanpa memerlukan akun/login.
+2. Peminjam dapat mengajukan klaim pengembalian barang mandiri dan mencetak struk.
+3. Menegakkan prinsip antarmuka: tombol sentuh besar (minimal 44 px), satu tugas per layar, proteksi kebocoran kode pinjam di URL, dan otomatis reset (*idle timeout*) setelah 60 detik.
 
 ---
 
-## 1️⃣ Front‑end SPA (Vue 3 + Vite) – Struktur
-```
-frontend/
-├─ src/
-│  ├─ components/
-│  │  ├─ ItemList.vue
-│  │  ├─ LoanForm.vue
-│  │  └─ Dashboard.vue
-│  ├─ views/
-│  │  ├─ DashboardView.vue
-│  │  ├─ InventoryView.vue
-│  │  └─ SettingsView.vue
-│  ├─ router/
-│  │  └─ index.js
-│  └─ store/
-│      └─ index.js (Pinia)
-└─ vite.config.ts
-```
-### Perintah setup
-```powershell
-cd C:\laragon\www\Peminjaman-iventaris
-mkdir frontend
-cd frontend
-npm init vite@latest . --template vue
-npm install axios pinia vue-router@4
-npm i -D @vue/test-utils vitest
-```
-### Integrasi API
-Buat file `src/services/api.js` dengan instance Axios yang menyertakan token Sanctum secara otomatis (withCredentials).
-```js
-import axios from 'axios';
-const api = axios.create({ baseURL: 'http://localhost/api', withCredentials: true });
-export default api;
-```
-### Uji SPA
-```bash
-npm run dev   # buka http://localhost:5173
-# lakukan login, lihat tabel item, buat pinjaman, kembali, logout
-```
----
-
-## 2️⃣ Caching & Optimasi Backend
-- **Redis**: `composer require predis/predis`
-- **Cache laporan stock** di `ReportController::stock` menggunakan `Cache::remember('stock_report', now()->addMinutes(10), fn()=> ...)`.
-- **Eager load** pada model yang sering dipakai:
-  ```php
-  Item::with(['category','division','loans'])->paginate(20);
-  ```
-- **Pagination** pada semua collection API (`->paginate(15)`), kirim meta `current_page`, `last_page`.
-- **Query index**: tambahkan indeks pada `items.division_id`, `items.category_id`, `loans.user_id`.
-
-### Perintah migrasi indeks
-```bash
-php artisan make:migration add_indexes_to_items_and_loans --table=items
-```
-Isi migration dengan `$table->index(['division_id','category_id']);` dan `$table->index('user_id');` pada tabel loans.
----
-
-## 3️⃣ Keamanan Lanjutan
-| Area | Implementasi |
-|------|--------------|
-| Rate limiting | `Route::middleware('throttle:60,1')->group(...);` |
-| CORS | `fruitcake/laravel-cors` → whitelist domain front‑end |
-| CSP & Helmet (front‑end) | meta header via Vite plugin |
-| Token revocation | Endpoint `POST /api/logout-all` yang menghapus semua personal access token milik pengguna |
-| Audit retention | Scheduler (`php artisan schedule:run`) untuk memindahkan audit log > 90 hari ke tabel `audit_logs_archive`.
-
-### Perintah schedule
-```bash
-php artisan make:command PurgeOldAuditLogs --command=purge:audit-logs
-```
-Isi `handle()` dengan query delete `where created_at < now()->subDays(90)`.
----
-
-## 4️⃣ End‑to‑End Testing (Cypress)
-1. **Install** di `frontend/`:
-```bash
-npm i -D cypress
-```
-2. **File contoh** `cypress/e2e/loan_flow.cy.js`:
-```js
-describe('Loan flow',()=>{
-  it('Login, borrow, return, logout',()=>{
-    cy.visit('/')
-    cy.get('[data-cy=email]').type('admin@example.com')
-    cy.get('[data-cy=password]').type('admin123')
-    cy.get('[data-cy=login]').click()
-    cy.contains('Item List')
-    cy.get('[data-cy=borrow-btn]').first().click()
-    cy.get('[data-cy=quantity]').type('2')
-    cy.get('[data-cy=confirm]').click()
-    cy.contains('Pinjaman berhasil')
-    // Return
-    cy.get('[data-cy=return-btn]').first().click()
-    cy.contains('Pengembalian berhasil')
-    cy.get('[data-cy=logout]').click()
-    cy.contains('Login')
-  })
-})
-```
-3. **Run**: `npx cypress run`.
----
-
-## 5️⃣ CI/CD (GitHub Actions)
-Buat file `.github/workflows/ci.yml`:
-```yaml
-name: CI
-on: [push, pull_request]
-jobs:
-  php-tests:
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: secret
-          MYSQL_DATABASE: inventory
-        ports: ['3306:3306']
-        options: >
-          --health-cmd="mysqladmin ping --silent"
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: mbstring, bcmath, intl, json, mysql
-      - name: Install Composer deps
-        run: composer install --prefer-dist --no-progress --no-suggest
-      - name: Copy env
-        run: cp .env.example .env && php artisan key:generate
-      - name: Run migrations & seed
-        env:
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: inventory
-          DB_USERNAME: root
-          DB_PASSWORD: secret
-        run: |
-          php artisan migrate --force
-      - name: Run PHPStan
-        run: vendor/bin/phpstan analyse
-      - name: Run PHPUnit
-        run: vendor/bin/phpunit --coverage-text
-  frontend-tests:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - run: npm ci
-      - run: npm run build
-      - name: Cypress run
-        uses: cypress-io/github-action@v5
-        with:
-          start: npm run dev
-          wait-on: http://localhost:5173
-          wait-on-timeout: 120
-```
----
-
-## 6️⃣ Monitoring & Observability
-- **Laravel Telescope**: `composer require laravel/telescope --dev` → `php artisan telescope:install && php artisan migrate`.
-- **Horizon** (jika queue dipakai): `composer require laravel/horizon` → `php artisan horizon`.
-- **Health Check** endpoint `GET /api/health` yang mengembalikan `status: ok` dan versi aplikasi.
-- **Grafana / Prometheus** (opsional) – expose `/metrics` via `spatie/laravel-metrics`.
----
-
-## 7️⃣ Release & Rollback Strategy
-1. **Tag release**: `git tag -a v1.0.0 -m "Release v1.0.0" && git push origin v1.0.0`.
-2. **Deploy script** (bash) yang melakukan:
-   - `git pull`
-   - `composer install --optimize-autoloader --no-dev`
-   - `php artisan migrate --force`
-   - `php artisan config:cache && php artisan route:cache`
-   - `npm ci && npm run build` (frontend)
-   - Restart **php-fpm** / **nginx**.
-3. **Rollback**:
-   - `git revert <release-commit>` atau `git checkout <previous-tag>`
-   - `php artisan migrate:rollback --step=1`
-   - Reload services.
----
-
-## 8️⃣ Dokumentasi
-- **API Docs**: gunakan **Laravel Scribe** (`composer require knuckleswtf/scribe`) → `php artisan scribe:generate`.
-- **Frontend Docs**: Storybook untuk komponen UI (`npm i -D storybook`).
-- **Runbooks**: Markdown di `docs/` (install, backup, emergency restore).
----
-
-## 📦 Checklist Penyelesaian Fase 3
-1️⃣ Implementasi SPA UI & router.  
-2️⃣ Tambahkan caching, indeks, dan pagination.  
-3️⃣ Hardening security (rate‑limit, CORS, token revocation).  
-4️⃣ End‑to‑end Cypress tests & CI pipeline.  
-5️⃣ Setup Telescope & optional Horizon.  
-6️⃣ Buat health‑check endpoint.  
-7️⃣ Dokumentasi API + UI.  
-8️⃣ Deploy ke staging, verifikasi semua tes, lalu release.
+## 📋 FR yang Dicakup
+- **FR-01**: Tampilan katalog barang, pencarian nama, filter kategori, dan indikator stok habis.
+- **FR-02**: Antarmuka form peminjaman langsung, pemilihan jumlah barang, dan cetak struk kode `PJM-XXXXXX`.
+- **FR-04**: Antarmuka cek peminjaman berdasarkan kode, kartu peminjaman, dan penanganan status kunci lockout.
+- **FR-05**: Antarmuka klaim pengembalian parsial/penuh dengan laporan kondisi fisik, penerbitan bukti kode `KMB-XXXXXX`.
+- **FR-21**: Otomatis reset antarmuka kiosk ke halaman beranda setelah 60 detik tanpa aktivitas (*idle reset*).
 
 ---
 
-Jika ada detail tambahan yang ingin dimasukkan atau penyesuaian urutan, beri tahu saya agar artefak dapat diperbarui.
+## 📦 Rincian Pekerjaan (Tasks)
 
-*Artifact metadata:* RequestFeedback = false, Summary = "Phase 3 plan", UserFacing = true.
+### 1. Fondasi Frontend & Konfigurasi Kiosk
+- [ ] Setup Vue 3 + Vite di folder `frontend/` dengan Tailwind CSS.
+- [ ] Konfigurasi `frontend/vite.config.js`: setup reverse proxy meneruskan `/api` dan `/sanctum` ke backend backend port 8000.
+- [ ] Konfigurasi Axios client (`frontend/src/api/client.js`):
+  - `baseURL: '/api'`
+  - `headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }`
+- [ ] Atur Vue Router (`frontend/src/router/index.js`) untuk alur rute publik mode Kiosk.
+
+### 2. Komponen Dasar & Token Desain Kiosk
+- [ ] **`TombolBesar.vue`**: Tombol sentuh ramah jari dengan target sentuh tinggi minimal `h-14` (minimal 44 px), teks tebal, dan efek aktif/klik yang jelas.
+- [ ] **`KartuBarang.vue`**: Menampilkan nama barang, kategori, ketersediaan stok; tombol "Pilih" dinonaktifkan otomatis bila stok 0.
+- [ ] **`BadgeStatus.vue`**: Menampilkan status baku dengan warna token desain PRD (Dipesan: Ungu, Dipinjam: Biru, Terlambat: Merah, Menunggu Verifikasi: Kuning, Selesai: Hijau, Dibatalkan: Abu gelap).
+- [ ] **`BadgeLencana.vue`**: Lencana pendukung (misal: "Sebagian", "Ada Catatan", "Ada Kerusakan").
+- [ ] **`InputJumlah.vue`**: Kontrol penambah/pengurang kuantitas (`-` dan `+`) yang dibatasi minimal 1 dan maksimal stok tersedia saat ini.
+- [ ] **`InputKode.vue`**: Input kode peminjaman yang otomatis mengubah huruf menjadi kapital (*uppercase*).
+- [ ] **`FormField.vue`**: Pembungkus input dengan label jelas dan penampil pesan galat validasi server (422).
+- [ ] **`ModalKonfirmasi.vue`**: Dialog konfirmasi sebelum submit transaksi krusial.
+- [ ] **`NotifikasiToast.vue`**: Notifikasi *toast* pesan sukses/gagal yang mudah terbaca.
+- [ ] **`StatusKosong.vue` & `Memuat.vue`**: Komponen visual saat data kosong atau sedang dalam proses memuat.
+- [ ] **`StrukCetak.vue`**: Format cetak struk kode peminjaman dengan CSS `@media print` yang otomatis menyembunyikan tombol navigasi saat dicetak ke printer struk/kertas.
+
+### 3. Layar-Layar Alur Kiosk
+- [ ] **`/` (Beranda)**:
+  Layar pembuka dengan 3 tombol sentuh besar utama:
+  1. *Lihat Katalog Barang*
+  2. *Pinjam Barang Sekarang*
+  3. *Cek Peminjaman / Kembalikan*
+- [ ] **`/katalog` (Katalog Barang)**:
+  Pencarian instan berdasarkan nama, tombol pill filter kategori, dan grid daftar `KartuBarang`. Barang dengan stok 0 tetap tampil dengan label "Habis" namun tidak dapat dimasukkan ke keranjang.
+- [ ] **`/pinjam` (Form Peminjaman)**:
+  - Pemilihan barang dan kuantitas unit.
+  - Pemilihan divisi dari dropdown `GET /api/kiosk/divisions`.
+  - Input nama peminjam, tipe peminjam (`karyawan` / `magang`), dan nomor telepon (opsional).
+  - Pemilihan batas tanggal pengembalian (default 7 hari ke depan).
+  - Setiap kali form dibuka, buat UUID acak baru sebagai `idempotency_key`.
+  - Tombol Kirim otomatis dinonaktifkan saat request sedang berlangsung untuk mencegah klik ganda.
+- [ ] **`/pinjam/selesai` (Struk & Kode Peminjaman)**:
+  Menampilkan kode `PJM-XXXXXX` dengan ukuran huruf sangat besar dan kontras tinggi, ringkasan barang, batas tanggal kembali, instruksi pencatatan/pengambilan barang, tombol *Cetak Struk*, dan tombol *Selesai*.
+- [ ] **`/cek` (Lookup Peminjaman)**:
+  Satu kolom input `InputKode` dan tombol *Cek*. Jika kode salah berulang 5 kali berturut-turut, kunci form dan tampilkan pesan lockout countdown 5 menit.
+- [ ] **`/cek/kartu` (Kartu Peminjaman)**:
+  Menampilkan identitas peminjam, `BadgeStatus`, rincian unit yang masih dipinjam, batas pengembalian, status hari terlambat, dan tombol aksi *Kembalikan Barang*.
+  > [!IMPORTANT]
+  > Nomor telepon peminjam **tidak pernah ditampilkan** pada layar ini demi menjaga privasi peminjam lain (BR-18).
+- [ ] **`/klaim` (Form Klaim Pengembalian)**:
+  Peminjam memilih jumlah unit yang dikembalikan per barang, mengisi kondisi fisik yang dilaporkan (baik, rusak, hilang), dan catatan opsional.
+- [ ] **`/klaim/selesai` (Bukti Klaim Pengembalian)**:
+  Menampilkan kode klaim `KMB-XXXXXX` dan pesan instruksi: *"Serahkan fisik barang ke petugas IT untuk diverifikasi"*.
+
+### 4. Penanganan Idle Reset 60 Detik (FR-21)
+- [ ] Buat composable `useIdleReset.js` yang memantau interaksi pengguna (`touchstart`, `mousemove`, `keydown`).
+- [ ] Jika tidak ada aktivitas selama 60 detik di layar mana pun pada kiosk:
+  - Bersihkan seluruh state form, keranjang belanja, dan kode pinjam di memori.
+  - Alihkan (*redirect*) layar kembali ke beranda (`/`).
+
+### 5. Keamanan Kode Pinjam di Kiosk (BR-18)
+- [ ] Kode pinjam **tidak boleh dicantumkan pada URL query string** (misal: dilarang `/cek?kode=PJM-123456`).
+- [ ] Lookup dikirim via HTTP POST body JSON ke `/api/kiosk/loans/lookup`.
+- [ ] Kode pinjam hanya disimpan dalam state memori sementara selama transaksi aktif.
+
+---
+
+## 🛠️ Gerbang Penyelesaian (Gate Criteria Fase 3)
+Fase 3 dinyatakan **SELESAI** jika:
+- [ ] **UI-01**: Peminjam dapat menyelesaikan seluruh alur peminjaman di layar sentuh tanpa hambatan dan tanpa keyboard fisik selain untuk mengisi teks input.
+- [ ] **UI-02**: Penekanan tombol Kirim berkali-kali secara cepat (*spam click*) hanya memicu tepat 1 request transaksi ke server.
+- [ ] **UI-03**: Kode peminjaman terbukti tidak muncul pada URL bar browser, riwayat kunjungan browser, maupun access log server.
+- [ ] **Lockout Kode**: Memasukkan kode salah 5 kali berturut-turut memicu penguncian form lookup selama 5 menit.
+- [ ] **Kecepatan Proses (G4)**: Peminjam dapat menyelesaikan pengisian form hingga kode pinjam terbit dalam waktu kurang dari 2 menit.
+- [ ] **UI-06**: Struk peminjaman berhasil dicetak secara bersih tanpa elemen navigasi dan header layar.
+- [ ] **UI-07**: Tampilan status *loading* dan *empty state* muncul secara proporsional.

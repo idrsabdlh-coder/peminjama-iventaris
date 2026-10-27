@@ -29,4 +29,13 @@ final class Skema
     {
         DB::statement("ALTER TABLE `{$tabel}` ADD CONSTRAINT `{$nama}` CHECK ({$ekspresi})");
     }
+
+    /**
+     * Hapus CHECK constraint berdasarkan nama.
+     * Dipakai di migration down() saat perlu mengganti nama kolom yang menjadi bagian constraint.
+     */
+    public static function dropCheck(string $tabel, string $nama): void
+    {
+        DB::statement("ALTER TABLE `{$tabel}` DROP CHECK `{$nama}`");
+    }
 }

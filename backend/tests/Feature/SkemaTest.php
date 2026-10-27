@@ -79,6 +79,12 @@ class SkemaTest extends TestCase
         $this->expectException(QueryException::class);
         $this->peminjaman('PJM-BBB333', '2026-10-23', '2026-10-22');
     }
+    public function test_zona_waktu_sesi_mysql_adalah_utc(): void
+{
+    $selisih = abs((int) DB::selectOne('SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS s')->s);
+
+    $this->assertLessThan(2, $selisih, 'time_zone sesi MySQL harus +00:00 (BR-21)');
+}
 
     // BR-05
     public function test_hasil_verifikasi_harus_berjumlah_sama_dengan_qty(): void

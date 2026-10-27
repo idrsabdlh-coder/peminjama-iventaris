@@ -26,7 +26,7 @@ class LaporanController extends Controller
                          COUNT(items.id) AS jumlah_barang,
                          SUM(items.total) AS total,
                          SUM(items.tersedia) AS tersedia,
-                         SUM(items.rusak) AS rusak')
+                         SUM(items.kondisi) AS kondisi')
             ->get()
             ->map(fn ($k) => [
                 'id'            => $k->id,
@@ -34,8 +34,8 @@ class LaporanController extends Controller
                 'jumlah_barang' => (int) $k->jumlah_barang,
                 'total'         => (int) $k->total,
                 'tersedia'      => (int) $k->tersedia,
-                'rusak'         => (int) $k->rusak,
-                'di_luar'       => (int) $k->total - (int) $k->tersedia - (int) $k->rusak,
+                'kondisi'       => (int) $k->kondisi,
+                'di_luar'       => (int) $k->total - (int) $k->tersedia - (int) $k->kondisi,
             ])
             ->values();
 
@@ -44,17 +44,18 @@ class LaporanController extends Controller
                 ->whereNull('dihapus_pada')
                 ->when($d['kategori_id'] ?? null, fn ($q, $id) => $q->where('kategori_id', $id))
                 ->orderBy('nama')
-                ->get(['id', 'nama', 'kategori_id', 'total', 'tersedia', 'rusak'])
+                ->get(['id', 'nama', 'tipe', 'kategori_id', 'total', 'tersedia', 'kondisi'])
                 ->groupBy('kategori_id');
 
             $kategori = $kategori->map(function ($k) use ($barang) {
                 $k['barang'] = ($barang[$k['id']] ?? collect())->map(fn ($b) => [
                     'id'       => $b->id,
                     'nama'     => $b->nama,
+                    'tipe'     => $b->tipe,
                     'total'    => (int) $b->total,
                     'tersedia' => (int) $b->tersedia,
-                    'rusak'    => (int) $b->rusak,
-                    'di_luar'  => (int) $b->total - (int) $b->tersedia - (int) $b->rusak,
+                    'kondisi'  => (int) $b->kondisi,
+                    'di_luar'  => (int) $b->total - (int) $b->tersedia - (int) $b->kondisi,
                 ])->values();
 
                 return $k;
@@ -66,7 +67,7 @@ class LaporanController extends Controller
                 'ringkasan' => [
                     'total'    => $kategori->sum('total'),
                     'tersedia' => $kategori->sum('tersedia'),
-                    'rusak'    => $kategori->sum('rusak'),
+                    'kondisi'  => $kategori->sum('kondisi'),
                     'di_luar'  => $kategori->sum('di_luar'),
                 ],
                 'kategori' => $kategori,

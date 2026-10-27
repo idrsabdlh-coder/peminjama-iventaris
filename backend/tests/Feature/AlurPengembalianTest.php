@@ -38,7 +38,7 @@ class AlurPengembalianTest extends TestCase
     private function buatPinjaman(int $qty = 4): array
     {
         $loanId = DB::table('loans')->insertGetId([
-            'kode_pinjam' => 'PJM-TEST01', 'nama_peminjam' => 'Budi',
+            'kode_pinjam' => 'PJM-TEST23', 'nama_peminjam' => 'Budi',
             'division_id' => $this->divisiId, 'tipe_peminjam' => 'karyawan',
             'tanggal_pinjam' => now()->subDays(5)->toDateString(),
             'batas_kembali_awal' => now()->subDays(2)->toDateString(),
@@ -49,7 +49,7 @@ class AlurPengembalianTest extends TestCase
         ]);
         DB::table('items')->where('id', $this->itemId)->update(['tersedia' => 10 - $qty]);
 
-        return [$loanId, $loanItemId, 'PJM-TEST01'];
+        return [$loanId, $loanItemId, 'PJM-TEST23'];
     }
 
     private function kirimKlaim(string $kode, array $baris, ?string $key = null)

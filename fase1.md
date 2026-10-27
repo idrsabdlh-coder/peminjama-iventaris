@@ -1,244 +1,88 @@
-# Phase 1 – Implementasi PRD
+# Fase 1 – Fondasi (Skema Database, Model & Auth Admin)
 
-## 1️⃣ Perbaikan konfigurasi
-| Item | Lokasi | Perubahan |
-|------|--------|-----------|
-| `.env.example` | `backend/.env.example` | - `DB_CONNECTION=mysql`<br>- `DB_HOST=127.0.0.1`<br>- `DB_DATABASE=inventaris_db`<br>- `DB_USERNAME=root`<br>- `DB_PASSWORD=` (kosong atau sesuai dev env)<br>- `SESSION_LIFETIME=15`<br>- `APP_LOCALE=id`<br>- **Hapus** semua variabel antrean (`QUEUE_CONNECTION`, dsb.) |
-| `config/app.php` | `backend/config/app.php` | Set `timezone` ke `'UTC'` |
-
-## 2️⃣ Migration
-### 2.1 Hapus migration lama
-```powershell
-# Pastikan berada di root project
-cd backend
-php artisan migrate:reset --path=database/migrations
-```
-### 2.2 Buat migration 11 tabel domain
-```powershell
-php artisan make:migration create_divisions_table --create=divisions
-php artisan make:migration create_kategoris_table --create=kategoris
-php artisan make:migration create_items_table --create=items
-php artisan make:migration create_loans_table --create=loans
-php artisan make:migration create_audit_logs_table --create=audit_logs
-php artisan make:migration create_settings_table --create=settings
-php artisan make:migration create_checks_table --create=checks
-# Pivot tabel
-php artisan make:migration create_item_loan_table --create=item_loan
-php artisan make:migration create_item_category_table --create=item_category
-php artisan make:migration create_user_division_table --create=user_division
-```
-#### Contoh isi migration `create_items_table`
-```php
-Schema::create('items', function (Blueprint $table) {
-    $table->id();
-    $table->string('name');
-    $table->foreignId('category_id')->constrained('kategoris')->cascadeOnDelete();
-    $table->foreignId('division_id')->constrained()->cascadeOnDelete();
-    $table->integer('total_stock')->default(0);
-    $table->integer('available_stock')->default(0);
-    $table->integer('damaged_stock')->default(0);
-    $table->enum('status', ['available','unavailable','maintenance'])->default('available');
-    $table->timestamps();
-});
-```
-
-**Uji migrasi**: `php artisan migrate` – Pastikan tidak ada error dan semua tabel muncul (`php artisan db:show`).
-
-## 3️⃣ Model & Relasi (13 model)
-| Model | Path | Relasi utama |
-|-------|------|--------------|
-| `Division` | `app/Models/Division.php` | `hasMany(Item::class)` / `belongsToMany(User::class)` |
-| `Category` | `app/Models/Category.php` | `hasMany(Item::class)` |
-| `Item` | `app/Models/Item.php` | `belongsTo(Category::class)`, `belongsTo(Division::class)`, `belongsToMany(Loan::class, 'item_loan')` |
-| `Loan` | `app/Models/Loan.php` | `belongsTo(User::class)`, `belongsToMany(Item::class, 'item_loan')`, `hasOne(Check::class)` |
-| `User` | `app/Models/User.php` | `belongsToMany(Division::class, 'user_division')`, `hasMany(Loan::class)` |
-| `AuditLog` | `app/Models/AuditLog.php` | `morphTo()` |
-| `Setting` | `app/Models/Setting.php` | – |
-| `Check` | `app/Models/Check.php` | `belongsTo(Loan::class)` |
-| `ItemLoan` (pivot) | `app/Models/ItemLoan.php` | `belongsTo(Item::class)`, `belongsTo(Loan::class)` |
-| `ItemCategory` (pivot) | `app/Models/ItemCategory.php` | `belongsTo(Item::class)`, `belongsTo(Category::class)` |
-| `UserDivision` (pivot) | `app/Models/UserDivision.php` | `belongsTo(User::class)`, `belongsTo(Division::class)` |
-| `PasswordReset` | `app/Models/PasswordReset.php` | – |
-| `PersonalAccessToken` | `vendor/laravel/sanctum/src/PersonalAccessToken.php` | – |
-
-**Perintah pembuatan model** (contoh):
-```powershell
-php artisan make:model Division -m
-php artisan make:model Category -m
-php artisan make:model Item -m
-php artisan make:model Loan -m
-php artisan make:model AuditLog -m
-php artisan make:model Setting -m
-php artisan make:model Check -m
-php artisan make:model ItemLoan -p
-php artisan make:model ItemCategory -p
-php artisan make:model UserDivision -p
-```
-**Uji relasi**: buat unit test di `tests/Unit/ModelRelationsTest.php` yang memanggil `assertInstanceOf` pada setiap relasi.
-
-## 4️⃣ Seeder (tanpa password)
-Buat file seeder master:
-```powershell
-php artisan make:seeder MasterSeeder
-```
-Isi `database/seeders/MasterSeeder.php` (ringkas):
-```php
-public function run()
-{
-    // Divisi
-    \App\Models\Division::factory()->count(3)->create();
-    // Kategori
-    \App\Models\Category::factory()->count(5)->create();
-    // Settings (8 buah)
-    $settings = [
-        ['key' => 'loan_duration', 'value' => '7'],
-        ['key' => 'max_loan_per_user', 'value' => '3'],
-        // ... tambah total 8 pengaturan
-    ];
-    foreach ($settings as $s) {
-        \App\Models\Setting::create($s);
-    }
-    // User admin (tanpa password – gunakan bcrypt('') atau null)
-    \App\Models\User::factory()->create([
-        'name' => 'admin',
-        'email' => 'admin@example.com',
-        'password' => \Hash::make('admin123'), // tetap ada password untuk login
-        'active' => true,
-    ]);
-}
-```
-Jalankan:
-```powershell
-php artisan db:seed --class=MasterSeeder
-```
-**Uji seeder**: `php artisan tinker` → `App\Models\Division::count()` dll harus mengembalikan nilai `> 0`.
-
-## 5️⃣ Artisan Commands
-| Command | Path | Deskripsi |
-|---------|------|-----------|
-| `inventaris:buat-admin` | `app/Console/Commands/BuatAdmin.php` | Membuat atau memperbarui user admin (email, nama) tanpa meminta password lewat input. |
-| `inventaris:reset-password {email}` | `app/Console/Commands/ResetPassword.php` | Reset password menjadi string acak dan mengirim email (atau hanya menampilkan di console). |
-
-**Contoh pembuatan command**:
-```powershell
-php artisan make:command BuatAdmin --command=inventaris:buat-admin
-php artisan make:command ResetPassword --command=inventaris:reset-password
-```
-Daftarkan di `app/Console/Kernel.php`.
-
-**Uji command**:
-```powershell
-php artisan inventaris:buat-admin
-php artisan inventaris:reset-password admin@example.com
-```
-Periksa DB `users` untuk memastikan perubahan.
+Dokumen ini merupakan panduan pelaksanaan **Fase 1** yang diturunkan secara langsung dari **[Prd (1).md](file:///C:/Users/HP/Documents/magang/Peminjaman-iventaris/Prd%20(1).md)** dan **[fase.md](file:///C:/Users/HP/Documents/magang/Peminjaman-iventaris/fase.md)**.
 
 ---
 
-### 6️⃣ Sanctum SPA Mode (API + Front‑end)
-1. **Install & konfigurasi** (jika belum):
-```powershell
-composer require laravel/sanctum
-php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
-php artisan migrate
-```
-2. **Add middleware** di `app/Http/Kernel.php`
-```php
-'api' => [
-    \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
-    'throttle:api',
-    \Illuminate\Routing\Middleware\SubstituteBindings::class,
-],
-```
-3. **Routes (api.php)**
-```php
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
-Route::get('/me', [AuthController::class, 'me'])->middleware('auth:sanctum');
-```
-4. **Middleware akun aktif** – buat `app/Http/Middleware/CheckActive.php`
-```php
-public function handle($request, Closure $next)
-{
-    if (auth()->user() && !auth()->user()->active) {
-        return response()->json(['message' => 'Akun tidak aktif'], 403);
-    }
-    return $next($request);
-}
-```
-Daftarkan di `kernel.php` dan terapkan pada route grup.
-
-**Uji SPA** (Postman / curl):
-```bash
-curl -X POST http://localhost/api/login -d "email=admin@example.com&password=admin123"
-# dapatkan token
-curl -H "Authorization: Bearer <token>" http://localhost/api/me
-curl -X POST -H "Authorization: Bearer <token>" http://localhost/api/logout
-```
-Respons harus 200 dan token tidak lagi valid.
+## 🎯 Tujuan Fase
+Membangun fondasi arsitektur backend Laravel 13 yang kuat dan aman:
+1. Skema basis data lengkap untuk seluruh fitur proyek sejak awal (11 tabel domain + `settings`, `audit_logs`, `sessions`) dengan aturan integritas ketat (FK `RESTRICT`, CHECK constraints, generated column).
+2. Model Eloquent lengkap beserta definisinya.
+3. Seeder data awal master (divisi, kategori, 8 kunci pengaturan).
+4. Otentikasi admin berbasis sesi aman (Sanctum SPA, idle 15 menit, middleware akun aktif) dan perintah console Artisan untuk manajemen kredensial admin.
 
 ---
 
-## 7️⃣ Pengujian (PHPUnit)
-### 7.1 Test Auth Flow (`tests/Feature/AuthTest.php`)
-```php
-public function test_user_can_login_and_logout()
-{
-    $user = \App\Models\User::factory()->create(['password' => bcrypt('secret')]);
-    $response = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'secret']);
-    $response->assertOk()->assertJsonStructure(['token']);
-    $token = $response->json('token');
-
-    $this->withHeaders(['Authorization' => "Bearer $token"]).getJson('/api/me')->assertOk();
-    $this->withHeaders(['Authorization' => "Bearer $token"]).postJson('/api/logout')->assertOk();
-}
-```
-### 7.2 Test Model Relations & Settings (`tests/Unit/ModelRelationsTest.php`)
-```php
-public function test_item_relations()
-{
-    $item = \App\Models\Item::factory()->create();
-    $this->assertInstanceOf(\App\Models\Category::class, $item->category);
-    $this->assertInstanceOf(\App\Models\Division::class, $item->division);
-    $this->assertTrue($item->loans->isEmpty());
-}
-
-public function test_settings_loaded()
-{
-    $setting = \App\Models\Setting::where('key', 'loan_duration')->first();
-    $this->assertEquals('7', $setting->value);
-}
-```
-### 7.3 Test Artisan Commands (`tests/Feature/CommandTest.php`)
-```php
-public function test_it_creates_or_updates_admin_user()
-{
-    $this->artisan('inventaris:buat-admin --email=admin@example.com --name=admin')
-         ->expectsOutput('Admin user created with default password (admin123).')
-         ->assertExitCode(0);
-    $this->assertDatabaseHas('users', ['email' => 'admin@example.com', 'name' => 'admin']);
-}
-```
-### 7.4 Menjalankan semua tes
-```bash
-php artisan test --parallel
-```
-Semua tes harus **green** (coverage > 80 %).
+## 📋 FR yang Dicakup
+- **FR-11**: Login admin, logout, sesi idle 15 menit, pembatasan laju (*rate limiting*).
+- **FR-20**: Pembuatan akun admin pertama dan reset password via perintah Artisan (tanpa kredensial *hardcoded*).
 
 ---
 
-### 📋 Ringkasan Eksekusi
-1. Update `.env.example` & `config/app.php`.
-2. Hapus migration lama, buat 11 migration baru + pivot (termasuk `kategoris`).
-3. Buat 13 model beserta relasi.
-4. Buat seeder master (8 setting, divisi, kategori, admin).
-5. Implementasi dua artisan command.
-6. Konfigurasi Sanctum SPA, tambahkan middleware akun aktif.
-7. Tulis dan jalankan tes T‑5.1 & U‑05.
+## 📦 Rincian Pekerjaan (Tasks)
 
-Setelah semua langkah selesai, jalankan:
-```powershell
-php artisan migrate:fresh --seed
-php artisan test
-```
-Pastikan semua tes lulus sebelum `git commit`.
+### 1. Konfigurasi Backend & Sanctum SPA
+- [x] Atur timezone default ke `'UTC'` di `backend/config/app.php`. Waktu transaksi internal selalu disimpan dalam format UTC.
+- [x] Konfigurasi sesi database di `.env`: `SESSION_DRIVER=database` dan `SESSION_LIFETIME=15`.
+- [x] Konfigurasi Sanctum mode SPA: daftarkan domain lokal frontend di `SANCTUM_STATEFUL_DOMAINS` (misal: `localhost:5173,127.0.0.1:5173`).
+- [x] Pastikan cookie sesi memakai `httpOnly`, `SameSite=Lax` (atau `Strict` pada produksi), dan dilindungi CSRF.
+
+### 2. Migrasi Skema Basis Data (11 Tabel Domain + Tabel Sistem)
+Semua foreign key **wajib memakai `RESTRICT`** (tidak boleh ada `CASCADE`). Kolom nama entitas memakai Bahasa Indonesia:
+1. **`users`**: Akun admin (`id`, `name`, `email` UNIQUE, `password` hash, `aktif` TINYINT(1) default 1, `login_terakhir`, `dibuat_pada`).
+2. **`divisions`**: Divisi peminjam (`id`, `nama` UNIQUE, `aktif` TINYINT(1) default 1).
+3. **`categories`**: Kategori inventaris (`id`, `nama` UNIQUE, `aktif` TINYINT(1) default 1).
+4. **`settings`**: Parameter kebijakan (`kunci` VARCHAR(60) PK, `nilai` VARCHAR(255), `diubah_pada`).
+5. **`items`**: Barang inventaris (`id`, `nama`, `deskripsi`, `kategori_id` FK categories RESTRICT, `total`, `tersedia`, `rusak` default 0, `boleh_diperpanjang` default 1, `dibuat_pada`, `diubah_pada`, `dihapus_pada` soft-delete, `nama_aktif` GENERATED STORED UNIQUE).
+   - CHECK: `total >= 0`, `tersedia >= 0`, `rusak >= 0`, `tersedia + rusak <= total`.
+6. **`loans`**: Header transaksi pinjam (`id`, `kode_pinjam` UNIQUE format PJM-XXXXXX, `nama_peminjam`, `division_id` FK divisions RESTRICT, `tipe_peminjam` ENUM('karyawan','magang'), `telepon`, `tanggal_pinjam` DATE, `batas_kembali_awal` DATE, `batas_kembali` DATE, `idempotency_key` CHAR(36) UNIQUE, `dibuat_pada`, `dibatalkan_pada`, `alasan_batal`, `dibatalkan_oleh` FK users RESTRICT).
+7. **`loan_items`**: Detail barang per pinjaman (`id`, `loan_id` FK loans RESTRICT, `item_id` FK items RESTRICT, `qty_dipinjam` CHECK >= 1). UNIQUE(`loan_id`, `item_id`).
+8. **`return_claims`**: Pengajuan klaim pengembalian kiosk (`id`, `kode_klaim` UNIQUE format KMB-XXXXXX, `loan_id` FK loans RESTRICT, `catatan_peminjam`, `diklaim_pada`, `hari_terlambat` default 0, `status` ENUM('menunggu','diverifikasi'), `diverifikasi_oleh` FK users RESTRICT, `diverifikasi_pada`, `catatan_admin`, `idempotency_key` UNIQUE).
+9. **`return_claim_lines`**: Rincian fisik barang yang diklaim & hasil verifikasi (`id`, `claim_id` FK return_claims RESTRICT, `loan_item_id` FK loan_items RESTRICT, `kondisi_dilaporkan` ENUM('baik','rusak','hilang'), `qty` CHECK >= 1, `qty_baik`, `qty_rusak`, `qty_hilang`, `qty_ditolak`).
+10. **`loan_extensions`**: Riwayat perpanjangan durasi pinjam (`id`, `loan_id` FK loans RESTRICT, `batas_lama`, `batas_baru`, `tambahan_hari` CHECK >= 1, `alasan`, `diajukan_oleh` ENUM('peminjam','admin'), `user_id` FK users RESTRICT, `dibuat_pada`).
+11. **`loan_corrections`**: Log perubahan koreksi data transaksi oleh admin (`id`, `loan_id` FK loans RESTRICT, `kolom`, `nilai_lama`, `nilai_baru`, `alasan` NOT NULL, `user_id` FK users RESTRICT, `dibuat_pada`).
+12. **`stock_movements`**: Buku besar mutasi stok (`id`, `item_id` FK items RESTRICT, `jenis` ENUM, `delta_total`, `delta_tersedia`, `delta_rusak`, `ref_tipe`, `ref_id`, `user_id` FK users, `catatan`, `dibuat_pada`).
+13. **`audit_logs`**: Rekam jejak audit keamanan (`id`, `user_id` FK users, `aksi`, `entitas`, `entitas_id`, `detail` JSON, `dibuat_pada`).
+14. **`sessions`**: Tabel bawaan Laravel untuk session management database.
+
+### 3. Model Eloquent & Relasi
+- [x] Buat Model: `User`, `Division`, `Category`, `Item`, `Loan`, `LoanItem`, `ReturnClaim`, `ReturnClaimLine`, `LoanExtension`, `LoanCorrection`, `StockMovement`, `AuditLog`, `Setting`.
+- [x] Pada model domain, terapkan `$timestamps = false` dan tangani timestamp sesuai kolom database (`dibuat_pada`, `diubah_pada`).
+- [x] Terapkan relasi Eloquent yang tepat (`belongsTo`, `hasMany`).
+
+### 4. Seeder Data Awal Master
+- [x] **`DivisionSeeder`**: Membuat data divisi awal (IT, HRD, Finance, Operational, Marketing).
+- [x] **`CategorySeeder`**: Wajib membuat kategori ID 1 "Tanpa Kategori", serta kategori umum IT (Laptop, Monitor, Proyektor, Adapter, Kabel, Periferal).
+- [x] **`SettingSeeder`**: Mengisi 8 parameter kebijakan baku:
+  1. `maks_durasi_awal_hari` = `7`
+  2. `maks_perpanjangan` = `2`
+  3. `maks_hari_per_perpanjangan` = `7`
+  4. `maks_booking_hari` = `7`
+  5. `sesi_idle_menit` = `15`
+  6. `kiosk_idle_detik` = `60`
+  7. `kiosk_lookup_maks_gagal` = `5`
+  8. `kiosk_lookup_kunci_menit` = `5`
+
+### 5. Artisan Commands (FR-20)
+- [x] `php artisan inventaris:buat-admin`:
+  Membuat akun admin pertama via CLI dengan prompt interaktif (nama, email, password tersembunyi `secret()`). Password langsung di-hash menggunakan `Hash::make()`.
+- [x] `php artisan inventaris:reset-password {email}`:
+  Mereset password admin jika terkunci, meminta input password baru yang aman.
+
+### 6. Endpoint & Middleware Autentikasi Admin (FR-11)
+- [x] `GET /sanctum/csrf-cookie`: Endpoint cookie proteksi CSRF.
+- [x] `POST /api/auth/login`: Validasi email & password, login via guard web/sanctum, perbarui `login_terakhir`, kembalikan info user. Diberikan pembatas laju (`throttle:5,1`).
+- [x] `POST /api/auth/logout`: Logout sesi dan batalkan sesi aktif.
+- [x] `GET /api/auth/me`: Mengembalikan data admin yang sedang login.
+- [x] `POST /api/auth/change-password`: Ganti password admin sendiri (wajib memasukkan password lama).
+- [x] Middleware `admin.aktif`: Memeriksa apakah `auth()->user()->aktif == 1`. Jika 0, batalkan sesi dan tolak dengan `403 Forbidden`.
+
+---
+
+## 🛠️ Gerbang Penyelesaian (Gate Criteria Fase 1)
+Fase 1 dinyatakan **SELESAI** jika:
+- [x] **T-5.1 Lolos**: Mengakses rute admin (`/api/admin/*`) tanpa login menghasilkan penolakan `401 Unauthorized`.
+- [x] **U-05 Lolos**: Password tersimpan di basis data dalam format hash bcrypt/argon2id, tidak pernah ada teks biasa (*plain text*).
+- [x] **Sesi Idle**: Sesi otomatis kedaluwarsa setelah 15 menit idle.
+- [x] **Bebas Kredensial (G3)**: Tidak ada kredensial admin default di file kode sumber atau repository.
+- [x] **Portabilitas (G6)**: Perintah `php artisan migrate:fresh --seed` berjalan mulus dari repo bersih tanpa error.

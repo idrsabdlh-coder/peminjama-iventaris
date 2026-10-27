@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\Kiosk\PembatalanController;
 use App\Http\Controllers\Api\Admin\ItemController;
 use App\Http\Controllers\Api\Kiosk\PengembalianController;
 use App\Http\Controllers\Api\Admin\KlaimController;
+use App\Http\Controllers\Api\Admin\PengembalianController as AdminPengembalianController;
+ 
 
 Route::prefix('auth')->group(function () {
     Route::post('login', [LoginController::class, 'store']);
@@ -63,9 +65,8 @@ Route::prefix('kiosk')->group(function () {
     Route::get('divisi', [KatalogController::class, 'divisi']);
     Route::post('peminjaman', [PeminjamanController::class, 'store']);
     Route::post('peminjaman/cek', CekPeminjamanController::class);
-    Route::post('peminjaman/batal', PembatalanController::class);   
-    Route::post('pengembalian', PengembalianController::class);   
-     Route::post('peminjaman', [PeminjamanController::class, 'store'])->middleware('throttle:10,1');
+    Route::post('peminjaman/batal', PembatalanController::class);      
+    Route::post('peminjaman', [PeminjamanController::class, 'store'])->middleware('throttle:10,1');
     Route::post('pengembalian', PengembalianController::class)->middleware('throttle:10,1');
 });   
 

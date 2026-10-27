@@ -60,9 +60,9 @@ Aturan kerja: **fase berikutnya baru dimulai setelah gerbang (gate) fase sebelum
 **Tujuan.** Memastikan lingkungan dan keputusan awal beres sebelum menulis kode.
 
 **Yang dikerjakan**
-- Verifikasi koneksi MySQL 8.4 di PHPBRPO ke database `inventaris_db`.
+- Verifikasi koneksi MySQL 8.4 di PHPBRO (menggunakan Adminer) ke database `inventaris_db`.
 - Konfirmasi stack (Laravel + Vue) ke pemilik repo dan pengembang lain. AGENTS.md repo mewajibkan ini.
-- Putuskan cara menjalankan aplikasi: Herd, PHPBRPO, atau `php artisan serve`, lalu catat di panduan setup.
+- Putuskan cara menjalankan aplikasi: Herd, PHPBRO (menggunakan Adminer), atau `php artisan serve`, lalu catat di panduan setup.
 - Jawab pertanyaan terbuka PRD: pembagian MVP, nilai kebijakan, data lama, target kinerja.
 - Baca `frontend/package.json` dan `backend/package.json`.
 - Tentukan kategori dan divisi awal untuk seeder.
@@ -76,7 +76,7 @@ Aturan kerja: **fase berikutnya baru dimulai setelah gerbang (gate) fase sebelum
 - [ ] Satu cara menjalankan aplikasi dipilih dan tercatat.
 - [ ] `git fetch` berjalan tanpa error.
 
-**Risiko terkait.** Penyimpangan dari keputusan tim; lingkungan campuran Herd + PHPBRPO.
+**Risiko terkait.** Penyimpangan dari keputusan tim; lingkungan campuran Herd + PHPBRO.
 
 ---
 
@@ -251,7 +251,7 @@ Aturan kerja: **fase berikutnya baru dimulai setelah gerbang (gate) fase sebelum
 - Uji kinerja: halaman daftar kurang dari 2 detik pada 5.000 transaksi, transaksi peminjaman kurang dari 1 detik.
 - Pemeriksaan keamanan: `APP_DEBUG=false`, akun database berhak minimal, MySQL hanya 127.0.0.1, `.env` dan dump SQL tidak di Git, uji `<script>` (U-06).
 - Uji di Chrome dan Edge terbaru, tablet untuk kiosk, ponsel untuk admin (U-08).
-- Panduan setup PHPBRPO, panduan backup (mysqldump terjadwal dan uji pulih), penanggung jawab utama dan pengganti.
+- Panduan setup PHPBRO (Adminer), panduan backup (mysqldump terjadwal dan uji pulih), penanggung jawab utama dan pengganti.
 - Uji penerimaan pengguna (UAT) oleh peminjam dan admin.
 - Migrasi data lama dari PostgreSQL ke MySQL, **hanya bila** data asli ditemukan. Jangan menimpa data lama.
 - Keputusan cara penyajian produksi (`npm run build`, disalin ke `backend/public` atau dilayani terpisah).

@@ -21,18 +21,20 @@ class ItemStoreRequest extends FormRequest
     {
         return [
             // BR-14: nama hanya harus unik di antara barang aktif (kolom nama_aktif).
-            'nama' => ['required', 'string', 'max:150', Rule::unique('items', 'nama_aktif')],
-            'deskripsi' => ['nullable', 'string', 'max:2000'],
-            'kategori_id' => ['required', 'integer', Rule::exists('categories', 'id')],
-            'total' => ['required', 'integer', 'min:0', 'max:100000'],
-            'boleh_diperpanjang' => ['sometimes', 'boolean'],
+            'nama'              => ['required', 'string', 'max:150', Rule::unique('items', 'nama_aktif')],
+            // tipe: spesifikasi/versi barang, contoh: "Dell Latitude 5420 Core i5-1135G7"
+            'tipe'              => ['nullable', 'string', 'max:255'],
+            'deskripsi'         => ['nullable', 'string', 'max:2000'],
+            'kategori_id'       => ['required', 'integer', Rule::exists('categories', 'id')],
+            'total'             => ['required', 'integer', 'min:0', 'max:100000'],
+            'boleh_diperpanjang'=> ['sometimes', 'boolean'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'nama.unique' => 'Nama barang sudah dipakai barang lain.',
+            'nama.unique'        => 'Nama barang sudah dipakai barang lain.',
             'kategori_id.exists' => 'Kategori tidak ditemukan.',
         ];
     }

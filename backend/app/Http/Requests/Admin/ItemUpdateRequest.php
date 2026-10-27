@@ -24,19 +24,21 @@ class ItemUpdateRequest extends FormRequest
         $id = (int) $this->route('id');
 
         return [
-            'nama' => ['sometimes', 'required', 'string', 'max:150',
+            'nama'              => ['sometimes', 'required', 'string', 'max:150',
                 Rule::unique('items', 'nama_aktif')->ignore($id)],
-            'deskripsi' => ['sometimes', 'nullable', 'string', 'max:2000'],
-            'kategori_id' => ['sometimes', 'required', 'integer', Rule::exists('categories', 'id')],
-            'total' => ['sometimes', 'required', 'integer', 'min:0', 'max:100000'],
-            'boleh_diperpanjang' => ['sometimes', 'boolean'],
+            // tipe: spesifikasi/versi barang, contoh: "Epson EB-X51", "HP EliteBook 840 G8"
+            'tipe'              => ['sometimes', 'nullable', 'string', 'max:255'],
+            'deskripsi'         => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'kategori_id'       => ['sometimes', 'required', 'integer', Rule::exists('categories', 'id')],
+            'total'             => ['sometimes', 'required', 'integer', 'min:0', 'max:100000'],
+            'boleh_diperpanjang'=> ['sometimes', 'boolean'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'nama.unique' => 'Nama barang sudah dipakai barang lain.',
+            'nama.unique'        => 'Nama barang sudah dipakai barang lain.',
             'kategori_id.exists' => 'Kategori tidak ditemukan.',
         ];
     }

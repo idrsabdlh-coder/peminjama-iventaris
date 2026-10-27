@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -15,7 +16,7 @@ class PengembalianController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         $d = $request->validate([
-            'kode_pinjam'      => ['required', 'string', 'max:12'],
+            'kode_pinjam'      => ['required', 'string', 'max:20'],
             'catatan_peminjam' => ['nullable', 'string', 'max:500'],
             'idempotency_key'  => ['nullable', 'uuid'],
             'baris'            => ['required', 'array', 'min:1'],
@@ -24,6 +25,30 @@ class PengembalianController extends Controller
             'baris.*.qty'      => ['required', 'integer', 'min:1'],
         ]);
 
+        $maksGagal  = (int) config('inventaris.kiosk_lookup_maks_gagal');
+        $kunciMenit = (int) config('inventaris.kiosk_lookup_kunci_menit');
+        $kunciRl    = 'kiosk-lookup:'.$request->ip();
+
+        if (RateLimiter::tooManyAttempts($kunciRl, $maksGagal)) {
+            $detik = RateLimiter::availableIn($kunciRl);
+
+            return response()->json([
+                'message' => 'Terlalu banyak percobaan. Coba lagi dalam '.max(1, (int) ceil($detik / 60)).' menit atau hubungi petugas IT.',
+                'retry_after' => $detik,
+            ], 429);
+        }
+
+        $kode = strtoupper(trim($d['kode_pinjam']));
+        $tidakDitemukan = fn () => response()->json([
+            'message' => 'Kode pinjam tidak ditemukan. Periksa kembali kode di struk.',
+        ], 404);
+
+        if (! preg_match('/^PJM-[A-HJKMNP-Z2-9]{6}$/', $kode)) {
+            RateLimiter::hit($kunciRl, $kunciMenit * 60);
+
+            return $tidakDitemukan();
+        }
+
         if (! empty($d['idempotency_key'])) {
             $ada = DB::table('return_claims')->where('idempotency_key', $d['idempotency_key'])->first();
             if ($ada) {
@@ -31,13 +56,21 @@ class PengembalianController extends Controller
             }
         }
 
-        $klaim = DB::transaction(function () use ($d) {
-            $loan = DB::table('loans')->where('kode_pinjam', $d['kode_pinjam'])->lockForUpdate()->first();
+        $klaim = DB::transaction(function () use ($d, $kode) {
+            $loan = DB::table('loans')->where('kode_pinjam', $kode)->lockForUpdate()->first();
 
-            abort_if(! $loan, 404, 'Peminjaman tidak ditemukan.');
+            if (! $loan) {
+                return null;
+            }
 
             if ($loan->dibatalkan_pada !== null) {
                 throw ValidationException::withMessages(['kode_pinjam' => 'Peminjaman ini sudah dibatalkan.']);
+            }
+
+            $hariIni = Carbon::today('Asia/Jakarta');
+
+            if (Carbon::parse($loan->tanggal_pinjam, 'Asia/Jakarta')->startOfDay()->gt($hariIni)) {
+                throw ValidationException::withMessages(['kode_pinjam' => 'Peminjaman ini belum dimulai.']);
             }
 
             $loanItems = DB::table('loan_items')->where('loan_id', $loan->id)->get()->keyBy('item_id');
@@ -62,7 +95,6 @@ class PengembalianController extends Controller
             foreach ($perItem as $itemId => $qty) {
                 $li = $loanItems[$itemId];
 
-                // Yang sudah diverifikasi dihitung dari tiga hasil kembali; yang menunggu dihitung penuh.
                 $terpakai = (int) DB::table('return_claim_lines as l')
                     ->join('return_claims as c', 'c.id', '=', 'l.claim_id')
                     ->where('l.loan_item_id', $li->id)
@@ -79,10 +111,11 @@ class PengembalianController extends Controller
                 }
             }
 
-            $terlambat = (int) max(0, Carbon::parse($loan->batas_kembali)->startOfDay()->diffInDays(Carbon::today(), false));
+            $terlambat = (int) max(0, Carbon::parse($loan->batas_kembali, 'Asia/Jakarta')->startOfDay()
+                ->diffInDays($hariIni, false));
 
             $klaimId = DB::table('return_claims')->insertGetId([
-                'kode_klaim'       => 'KLM-'.Str::upper(Str::random(8)), // 12 karakter
+                'kode_klaim'       => 'KLM-'.Str::upper(Str::random(8)),
                 'loan_id'          => $loan->id,
                 'catatan_peminjam' => $d['catatan_peminjam'] ?? null,
                 'hari_terlambat'   => $terlambat,
@@ -100,6 +133,12 @@ class PengembalianController extends Controller
 
             return DB::table('return_claims')->where('id', $klaimId)->first();
         });
+
+        if (! $klaim) {
+            RateLimiter::hit($kunciRl, $kunciMenit * 60);
+
+            return $tidakDitemukan();
+        }
 
         return response()->json(['data' => $this->format($klaim)], 201);
     }

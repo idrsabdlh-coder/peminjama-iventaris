@@ -17,7 +17,7 @@ class ItemController extends Controller
     public function index(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'cari' => ['nullable', 'string', 'max:100'],
+            'cari'        => ['nullable', 'string', 'max:100'],
             'kategori_id' => ['nullable', 'integer', 'min:1'],
             'per_halaman' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -48,18 +48,19 @@ class ItemController extends Controller
 
     public function store(ItemStoreRequest $request): JsonResponse
     {
-        $d = $request->validated();
+        $d       = $request->validated();
         $adminId = $request->user()->id;
 
         $id = DB::transaction(function () use ($d, $adminId) {
             $id = DB::table('items')->insertGetId([
-                'nama' => $d['nama'],
-                'deskripsi' => $d['deskripsi'] ?? null,
-                'kategori_id' => $d['kategori_id'],
-                'total' => $d['total'],
-                'tersedia' => $d['total'],
-                'rusak' => 0,
-                'boleh_diperpanjang' => $d['boleh_diperpanjang'] ?? true,
+                'nama'              => $d['nama'],
+                'tipe'              => $d['tipe'] ?? null,
+                'deskripsi'         => $d['deskripsi'] ?? null,
+                'kategori_id'       => $d['kategori_id'],
+                'total'             => $d['total'],
+                'tersedia'          => $d['total'],
+                'kondisi'           => 0,
+                'boleh_diperpanjang'=> $d['boleh_diperpanjang'] ?? true,
             ]);
 
             if ((int) $d['total'] > 0) {
@@ -67,7 +68,8 @@ class ItemController extends Controller
             }
 
             $this->catatAudit($adminId, 'item_tambah', $id, [
-                'nama' => $d['nama'],
+                'nama'  => $d['nama'],
+                'tipe'  => $d['tipe'] ?? null,
                 'total' => (int) $d['total'],
             ]);
 
@@ -81,7 +83,7 @@ class ItemController extends Controller
 
     public function update(ItemUpdateRequest $request, int $id): JsonResponse
     {
-        $d = $request->validated();
+        $d       = $request->validated();
         $adminId = $request->user()->id;
 
         DB::transaction(function () use ($d, $id, $adminId) {
@@ -93,7 +95,7 @@ class ItemController extends Controller
 
             abort_if(! $lama, 404, 'Barang tidak ditemukan.');
 
-            $ubah = Arr::only($d, ['nama', 'deskripsi', 'kategori_id', 'boleh_diperpanjang']);
+            $ubah  = Arr::only($d, ['nama', 'tipe', 'deskripsi', 'kategori_id', 'boleh_diperpanjang']);
             $delta = 0;
 
             if (array_key_exists('total', $d)) {
@@ -108,7 +110,7 @@ class ItemController extends Controller
                 }
 
                 if ($delta !== 0) {
-                    $ubah['total'] = (int) $d['total'];
+                    $ubah['total']    = (int) $d['total'];
                     $ubah['tersedia'] = (int) $lama->tersedia + $delta;
                 }
             }
@@ -147,7 +149,7 @@ class ItemController extends Controller
 
             abort_if(! $barang, 404, 'Barang tidak ditemukan.');
 
-            $diLuar = (int) $barang->total - (int) $barang->tersedia - (int) $barang->rusak;
+            $diLuar = (int) $barang->total - (int) $barang->tersedia - (int) $barang->kondisi;
 
             if ($diLuar > 0) {
                 throw ValidationException::withMessages([
@@ -163,29 +165,31 @@ class ItemController extends Controller
         return response()->noContent();
     }
 
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
     private function catatStok(int $itemId, string $jenis, int $delta, int $adminId, string $catatan): void
     {
         DB::table('stock_movements')->insert([
-            'item_id' => $itemId,
-            'jenis' => $jenis,
-            'delta_total' => $delta,
-            'delta_tersedia' => $delta,
-            'delta_rusak' => 0,
-            'ref_tipe' => 'item',
-            'ref_id' => $itemId,
-            'user_id' => $adminId,
-            'catatan' => $catatan,
+            'item_id'       => $itemId,
+            'jenis'         => $jenis,
+            'delta_total'   => $delta,
+            'delta_tersedia'=> $delta,
+            'delta_rusak'   => 0,
+            'ref_tipe'      => 'item',
+            'ref_id'        => $itemId,
+            'user_id'       => $adminId,
+            'catatan'       => $catatan,
         ]);
     }
 
     private function catatAudit(int $adminId, string $aksi, int $itemId, array $detail): void
     {
         DB::table('audit_logs')->insert([
-            'user_id' => $adminId,
-            'aksi' => $aksi,
-            'entitas' => 'item',
+            'user_id'    => $adminId,
+            'aksi'       => $aksi,
+            'entitas'    => 'item',
             'entitas_id' => $itemId,
-            'detail' => json_encode($detail),
+            'detail'     => json_encode($detail),
         ]);
     }
 
@@ -195,25 +199,26 @@ class ItemController extends Controller
             ->join('categories', 'categories.id', '=', 'items.kategori_id')
             ->whereNull('items.dihapus_pada')
             ->select([
-                'items.id', 'items.nama', 'items.deskripsi', 'items.kategori_id',
+                'items.id', 'items.nama', 'items.tipe', 'items.deskripsi', 'items.kategori_id',
                 'categories.nama as kategori_nama',
-                'items.total', 'items.tersedia', 'items.rusak', 'items.boleh_diperpanjang',
+                'items.total', 'items.tersedia', 'items.kondisi', 'items.boleh_diperpanjang',
             ]);
     }
 
     private function format(object $b): array
     {
         return [
-            'id' => $b->id,
-            'nama' => $b->nama,
-            'deskripsi' => $b->deskripsi,
-            'kategori' => ['id' => $b->kategori_id, 'nama' => $b->kategori_nama],
-            'total' => (int) $b->total,
-            'tersedia' => (int) $b->tersedia,
-            'rusak' => (int) $b->rusak,
-            // Sisanya sedang di luar: dipinjam, dipesan, atau menunggu verifikasi pengembalian.
-            'di_luar' => (int) $b->total - (int) $b->tersedia - (int) $b->rusak,
-            'boleh_diperpanjang' => (bool) $b->boleh_diperpanjang,
+            'id'               => $b->id,
+            'nama'             => $b->nama,
+            'tipe'             => $b->tipe,
+            'deskripsi'        => $b->deskripsi,
+            'kategori'         => ['id' => $b->kategori_id, 'nama' => $b->kategori_nama],
+            'total'            => (int) $b->total,
+            'tersedia'         => (int) $b->tersedia,
+            'kondisi'          => (int) $b->kondisi,
+            // Unit yang sedang di luar: dipinjam, dipesan, atau menunggu verifikasi pengembalian.
+            'di_luar'          => (int) $b->total - (int) $b->tersedia - (int) $b->kondisi,
+            'boleh_diperpanjang'=> (bool) $b->boleh_diperpanjang,
         ];
     }
 }

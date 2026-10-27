@@ -11,24 +11,33 @@ class Item extends ModelDasar
     public const DELETED_AT = 'dihapus_pada';
 
     protected $fillable = [
-        'nama', 'deskripsi', 'kategori_id',
-        'total', 'tersedia', 'rusak', 'boleh_diperpanjang',
+        'nama', 'tipe', 'deskripsi', 'kategori_id',
+        'total', 'tersedia', 'kondisi', 'boleh_diperpanjang',
     ];
 
-    protected function casts(): array
+    // Laravel casts property for attribute type casting
+    protected $casts = [
+        'total' => 'integer',
+        'tersedia' => 'integer',
+        'tipe' => 'string',
+        'boleh_diperpanjang' => 'boolean',
+        'dibuat_pada' => 'datetime',
+        'diubah_pada' => 'datetime',
+        'dihapus_pada' => 'datetime',
+    ];
+
+    public function kategori()
     {
-        return [
-            'total' => 'integer',
-            'tersedia' => 'integer',
-            'rusak' => 'integer',
-            'boleh_diperpanjang' => 'boolean',
-            'dibuat_pada' => 'datetime',
-            'diubah_pada' => 'datetime',
-            'dihapus_pada' => 'datetime',
-        ];
+        return $this->belongsTo(Category::class, 'kategori_id');
     }
 
-    public function kategori() { return $this->belongsTo(Category::class, 'kategori_id'); }
-    public function loanItems() { return $this->hasMany(LoanItem::class, 'item_id'); }
-    public function stockMovements() { return $this->hasMany(StockMovement::class, 'item_id'); }
+    public function loanItems()
+    {
+        return $this->hasMany(LoanItem::class, 'item_id');
+    }
+
+    public function stockMovements()
+    {
+        return $this->hasMany(StockMovement::class, 'item_id');
+    }
 }
