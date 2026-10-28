@@ -19,7 +19,7 @@ return new class extends Migration
             ]);
             $table->integer('delta_total')->default(0);
             $table->integer('delta_tersedia')->default(0);
-            $table->integer('delta_rusak')->default(0);
+            $table->integer('delta_kondisi')->default(0);
             $table->string('ref_tipe', 30)->nullable();
             $table->unsignedInteger('ref_id')->nullable();
             $table->unsignedInteger('user_id')->nullable();

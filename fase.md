@@ -71,10 +71,10 @@ Aturan kerja: **fase berikutnya baru dimulai setelah gerbang (gate) fase sebelum
 **Keluaran.** Catatan keputusan, panduan menjalankan aplikasi, repo remote yang bisa di-push.
 
 **Selesai bila**
-- [ ] `php artisan migrate:status` berhasil terhubung ke MySQL.
-- [ ] Pemilik repo sudah mengonfirmasi penyimpangan stack.
-- [ ] Satu cara menjalankan aplikasi dipilih dan tercatat.
-- [ ] `git fetch` berjalan tanpa error.
+- [x] `php artisan migrate:status` berhasil terhubung ke MySQL.
+- [x] Pemilik repo sudah mengonfirmasi penyimpangan stack.
+- [x] Satu cara menjalankan aplikasi dipilih dan tercatat.
+- [x] `git fetch` berjalan tanpa error.
 
 **Risiko terkait.** Penyimpangan dari keputusan tim; lingkungan campuran Herd + PHPBRO.
 

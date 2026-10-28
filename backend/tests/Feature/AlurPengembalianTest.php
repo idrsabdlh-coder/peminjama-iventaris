@@ -24,7 +24,7 @@ class AlurPengembalianTest extends TestCase
 
         $this->itemId = DB::table('items')->insertGetId([
             'nama' => 'Laptop', 'kategori_id' => $this->kategoriId,
-            'total' => 10, 'tersedia' => 10, 'rusak' => 0, 'boleh_diperpanjang' => true,
+            'total' => 10, 'tersedia' => 10, 'kondisi' => 0, 'boleh_diperpanjang' => true,
         ]);
     }
 
@@ -95,7 +95,7 @@ class AlurPengembalianTest extends TestCase
         // 4. Stok: tersedia 6+2=8, rusak 1, total 10-1=9
         $item = DB::table('items')->where('id', $this->itemId)->first();
         $this->assertSame(8, (int) $item->tersedia);
-        $this->assertSame(1, (int) $item->rusak);
+        $this->assertSame(1, (int) $item->kondisi);
         $this->assertSame(9, (int) $item->total);
 
         $this->assertSame('diverifikasi', DB::table('return_claims')->where('id', $klaimId)->value('status'));

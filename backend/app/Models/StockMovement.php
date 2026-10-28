@@ -5,7 +5,7 @@ namespace App\Models;
 class StockMovement extends ModelDasar
 {
     protected $fillable = [
-        'item_id', 'jenis', 'delta_total', 'delta_tersedia', 'delta_rusak',
+        'item_id', 'jenis', 'delta_total', 'delta_tersedia', 'delta_kondisi',
         'ref_tipe', 'ref_id', 'user_id', 'catatan',
     ];
 
@@ -14,7 +14,7 @@ class StockMovement extends ModelDasar
         return [
             'delta_total' => 'integer',
             'delta_tersedia' => 'integer',
-            'delta_rusak' => 'integer',
+            'delta_kondisi' => 'integer',
             'dibuat_pada' => 'datetime',
         ];
     }

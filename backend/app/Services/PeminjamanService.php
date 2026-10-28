@@ -2,15 +2,19 @@
 
 namespace App\Services;
 
+use App\Support\KodeAcak;
+use App\Support\Tanggal;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PeminjamanService
 {
-    // BR-17: 31 karakter tidak ambigu (tanpa I, L, O; angka 2-9).
-    private const ALFABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
+    /**
+     * Mencari id transaksi loan berdasarkan idempotency_key.
+     */
     public function cariIdByKunci(string $kunci): ?int
     {
         $id = DB::table('loans')->where('idempotency_key', $kunci)->value('id');
@@ -18,49 +22,86 @@ class PeminjamanService
         return $id ? (int) $id : null;
     }
 
-    /** Membuat peminjaman atau pemesanan secara atomik. Mengembalikan id loan. */
+    /**
+     * Membuat peminjaman secara atomik dan idempoten.
+     * Mengembalikan id loan yang dibuat.
+     */
     public function buat(array $data): int
     {
-        // Urutan kunci baris tetap (id naik) agar tidak saling kunci (deadlock).
+        // 1. Cek idempotensi awal jika kunci sudah pernah diproses
+        if (!empty($data['idempotency_key'])) {
+            $idAda = $this->cariIdByKunci($data['idempotency_key']);
+            if ($idAda) {
+                return $idAda;
+            }
+        }
+
+        // Urutan kunci baris tetap (id naik) untuk mencegah deadlock (BR-02)
         $baris = collect($data['items'])->sortBy('item_id')->values();
         $ids = $baris->pluck('item_id')->all();
 
         return DB::transaction(function () use ($data, $baris, $ids) {
+            // Cek ulang idempotensi di dalam transaksi
+            if (!empty($data['idempotency_key'])) {
+                $idAda = $this->cariIdByKunci($data['idempotency_key']);
+                if ($idAda) {
+                    return $idAda;
+                }
+            }
+
+            // Kunci baris items dengan urutan id menaik
             $barang = DB::table('items')
                 ->whereIn('id', $ids)
                 ->whereNull('dihapus_pada')
-                ->orderBy('id')
+                ->orderBy('id', 'asc')
                 ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
 
-            // BR-02: validasi stok di server, setelah baris dikunci.
+            // Validasi keberadaan barang di database
             foreach ($baris as $b) {
                 $item = $barang->get($b['item_id']);
-
-                if (! $item) {
-                    throw ValidationException::withMessages([
-                        'items' => 'Ada barang yang tidak ditemukan di katalog. Muat ulang halaman lalu coba lagi.',
-                    ]);
-                }
-
-                if ($item->tersedia < $b['qty']) {
-                    throw ValidationException::withMessages([
-                        'items' => "Stok {$item->nama} tidak cukup. Tersedia {$item->tersedia}, diminta {$b['qty']}.",
-                    ]);
+                if (!$item) {
+                    throw new HttpException(404, "Barang dengan ID {$b['item_id']} tidak ditemukan.");
                 }
             }
 
+            // Pengurangan stok bersyarat secara atomic di SQL:
+            // UPDATE items SET tersedia = tersedia - :qty WHERE id = :id AND tersedia >= :qty
+            foreach ($baris as $b) {
+                $itemId = (int) $b['item_id'];
+                $qty = (int) $b['qty'];
+
+                $terupdate = DB::update(
+                    'UPDATE items SET tersedia = tersedia - :qty WHERE id = :id AND tersedia >= :min_qty',
+                    [
+                        'qty' => $qty,
+                        'id' => $itemId,
+                        'min_qty' => $qty,
+                    ]
+                );
+
+                if ($terupdate === 0) {
+                    $item = $barang->get($itemId);
+                    $nama = $item ? $item->nama : "Barang #{$itemId}";
+                    $tersedia = $item ? $item->tersedia : 0;
+                    throw new HttpException(409, "Stok {$nama} tidak mencukupi. Tersedia: {$tersedia}, diminta: {$qty}.");
+                }
+            }
+
+            $tanggalPinjam = $data['tanggal_pinjam'] ?? Tanggal::hariIni();
+            $batasKembali = $data['batas_kembali'] ?? date('Y-m-d', strtotime('+7 days'));
+
             $loanId = DB::table('loans')->insertGetId([
-                'kode_pinjam' => $this->kodeBaru(),
+                'kode_pinjam' => KodeAcak::pinjam(),
                 'nama_peminjam' => $data['nama_peminjam'],
                 'division_id' => $data['division_id'],
                 'tipe_peminjam' => $data['tipe_peminjam'],
                 'telepon' => $data['telepon'] ?? null,
-                'tanggal_pinjam' => $data['tanggal_pinjam'],
-                'batas_kembali_awal' => $data['batas_kembali'],
-                'batas_kembali' => $data['batas_kembali'],
-                'idempotency_key' => $data['idempotency_key'],
+                'tanggal_pinjam' => $tanggalPinjam,
+                'batas_kembali_awal' => $batasKembali,
+                'batas_kembali' => $batasKembali,
+                'idempotency_key' => $data['idempotency_key'] ?? null,
             ]);
 
             foreach ($baris as $b) {
@@ -72,34 +113,37 @@ class PeminjamanService
                     'qty_dipinjam' => $qty,
                 ]);
 
-                DB::table('items')->where('id', $b['item_id'])->decrement('tersedia', $qty);
-
-                // FR-S-02: setiap perubahan stok tercatat di buku besar.
+                // FR-18: Pencatatan ke buku besar stock_movements
                 DB::table('stock_movements')->insert([
                     'item_id' => $b['item_id'],
                     'jenis' => 'PINJAM',
                     'delta_total' => 0,
                     'delta_tersedia' => -$qty,
-                    'delta_rusak' => 0,
+                    'delta_kondisi' => 0,
                     'ref_tipe' => 'loan',
                     'ref_id' => $loanId,
                     'user_id' => null,
+                    'catatan' => 'Peminjaman inventaris',
                 ]);
             }
 
             return $loanId;
-        }, 3); // diulang otomatis bila terjadi deadlock
+        }, 3);
     }
 
-    /** Data untuk struk dan respons kiosk, dicari lewat id. Telepon tidak disertakan (BR-18). */
-    public function tampilkan(int $id): array
+    /**
+     * Menampilkan data kartu untuk struk/kiosk berdasarkan loan id.
+     */
+    public function tampilkan(int $id): ?array
     {
         $kode = DB::table('loans')->where('id', $id)->value('kode_pinjam');
 
-        return $this->kartuByKode($kode);
+        return $kode ? $this->kartuByKode($kode) : null;
     }
 
-    /** Kartu peminjaman untuk kiosk. Telepon sengaja tidak disertakan (BR-18). */
+    /**
+     * Mengambil detail kartu peminjaman berdasarkan kode (tanpa menyertakan nomor telepon peminjam).
+     */
     public function kartuByKode(string $kode): ?array
     {
         $loan = DB::table('loans')
@@ -107,7 +151,7 @@ class PeminjamanService
             ->where('loans.kode_pinjam', $kode)
             ->first(['loans.*', 'divisions.nama as divisi_nama']);
 
-        if (! $loan) {
+        if (!$loan) {
             return null;
         }
 
@@ -115,29 +159,24 @@ class PeminjamanService
             ->join('items', 'items.id', '=', 'loan_items.item_id')
             ->where('loan_items.loan_id', $loan->id)
             ->orderBy('items.nama')
-            ->get(['items.nama', 'loan_items.qty_dipinjam'])
-            ->map(fn ($i) => ['nama' => $i->nama, 'dipinjam' => (int) $i->qty_dipinjam])
+            ->get(['items.id as item_id', 'items.nama', 'loan_items.id as loan_item_id', 'loan_items.qty_dipinjam'])
+            ->map(fn ($i) => [
+                'item_id' => (int) $i->item_id,
+                'loan_item_id' => (int) $i->loan_item_id,
+                'nama' => $i->nama,
+                'dipinjam' => (int) $i->qty_dipinjam,
+            ])
             ->all();
 
-        $hariIni = Carbon::today('Asia/Jakarta');
-        $pinjam = Carbon::parse($loan->tanggal_pinjam, 'Asia/Jakarta')->startOfDay();
-        $batas = Carbon::parse($loan->batas_kembali, 'Asia/Jakarta')->startOfDay();
+        $statusPeminjaman = app(StatusPeminjaman::class);
+        $status = $statusPeminjaman->hitungStatus((array) $loan);
 
-        // Selisih hari kalender bertanda: positif bila $batas masih di depan.
+        $hariIni = Tanggal::sekarang()->startOfDay();
+        $batas = Tanggal::keAwalHari($loan->batas_kembali);
         $selisih = (int) round($hariIni->diffInDays($batas, false));
 
-        // Status diturunkan, tidak disimpan (bagian 7.2). Klaim ditambahkan di task berikutnya.
-        if ($loan->dibatalkan_pada !== null) {
-            $status = 'dibatalkan';
-        } elseif ($pinjam->gt($hariIni)) {
-            $status = 'dipesan';
-        } elseif ($selisih < 0) {
-            $status = 'terlambat';
-        } else {
-            $status = 'dipinjam';
-        }
-
         return [
+            'id' => (int) $loan->id,
             'kode_pinjam' => $loan->kode_pinjam,
             'nama_peminjam' => $loan->nama_peminjam,
             'divisi' => $loan->divisi_nama,
@@ -146,88 +185,10 @@ class PeminjamanService
             'batas_kembali' => $loan->batas_kembali,
             'status' => $status,
             'pemesanan' => $status === 'dipesan',
-            'boleh_dibatalkan' => $status === 'dipesan', // BR-24
+            'boleh_dibatalkan' => $status === 'dipesan',
             'sisa_hari' => max(0, $selisih),
             'hari_terlambat' => max(0, -$selisih),
             'items' => $items,
         ];
-    }
-
-    /**
-     * Batalkan pemesanan dari kiosk (BR-24). Idempoten: pembatalan ulang
-     * tidak mengembalikan stok dua kali. Mengembalikan null bila kode tidak ada.
-     */
-    public function batal(string $kode, ?string $alasan = null): ?array
-    {
-        return DB::transaction(function () use ($kode, $alasan) {
-            $loan = DB::table('loans')->where('kode_pinjam', $kode)->lockForUpdate()->first();
-
-            if (! $loan) {
-                return null;
-            }
-
-            if ($loan->dibatalkan_pada !== null) {
-                return $this->kartuByKode($kode);
-            }
-
-            $hariIni = Carbon::today('Asia/Jakarta');
-            $pinjam = Carbon::parse($loan->tanggal_pinjam, 'Asia/Jakarta')->startOfDay();
-
-            if (! $pinjam->gt($hariIni)) {
-                throw ValidationException::withMessages([
-                    'kode_pinjam' => 'Peminjaman yang sudah berjalan tidak bisa dibatalkan dari kiosk. Hubungi admin.',
-                ]);
-            }
-
-            $baris = DB::table('loan_items')->where('loan_id', $loan->id)->orderBy('item_id')->get();
-
-            DB::table('items')->whereIn('id', $baris->pluck('item_id')->all())
-                ->orderBy('id')->lockForUpdate()->get();
-
-            foreach ($baris as $b) {
-                $qty = (int) $b->qty_dipinjam;
-
-                DB::table('items')->where('id', $b->item_id)->increment('tersedia', $qty);
-
-                DB::table('stock_movements')->insert([
-                    'item_id' => $b->item_id,
-                    'jenis' => 'BATAL_PINJAM',
-                    'delta_total' => 0,
-                    'delta_tersedia' => $qty,
-                    'delta_rusak' => 0,
-                    'ref_tipe' => 'loan',
-                    'ref_id' => $loan->id,
-                    'user_id' => null,
-                ]);
-            }
-
-            DB::table('loans')->where('id', $loan->id)->update([
-                'dibatalkan_pada' => now(),
-                'alasan_batal' => $alasan !== null && trim($alasan) !== '' ? trim($alasan) : 'Dibatalkan oleh peminjam',
-                'dibatalkan_oleh' => null,
-            ]);
-
-            DB::table('audit_logs')->insert([
-                'user_id' => null,
-                'aksi' => 'batal_pinjam_kiosk',
-                'entitas' => 'loan',
-                'entitas_id' => $loan->id,
-                'detail' => json_encode(['kode_pinjam' => $kode]),
-            ]);
-
-            return $this->kartuByKode($kode);
-        });
-    }
-    private function kodeBaru(): string
-    {
-        do {
-            $acak = '';
-            for ($i = 0; $i < 6; $i++) {
-                $acak .= self::ALFABET[random_int(0, strlen(self::ALFABET) - 1)];
-            }
-            $kode = 'PJM-'.$acak;
-        } while (DB::table('loans')->where('kode_pinjam', $kode)->exists());
-
-        return $kode;
     }
 }

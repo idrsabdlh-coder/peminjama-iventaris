@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\VerifikasiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class KlaimController extends Controller
 {
@@ -34,7 +34,7 @@ class KlaimController extends Controller
         return response()->json(['data' => $this->detail($id)]);
     }
 
-    public function verifikasi(Request $request, int $id): JsonResponse
+    public function verifikasi(Request $request, int $id, VerifikasiService $verifikasiService): JsonResponse
     {
         $d = $request->validate([
             'catatan_admin'       => ['nullable', 'string', 'max:500'],
@@ -47,111 +47,10 @@ class KlaimController extends Controller
         ]);
 
         $adminId = $request->user()->id;
+        $verifikasiService->verifikasi($id, $d, $adminId);
 
-        DB::transaction(function () use ($d, $id, $adminId) {
-            $klaim = DB::table('return_claims')->where('id', $id)->lockForUpdate()->first();
-
-            abort_if(! $klaim, 404, 'Klaim tidak ditemukan.');
-
-            if ($klaim->status !== 'menunggu') {
-                throw ValidationException::withMessages(['klaim' => 'Klaim ini sudah diverifikasi.']);
-            }
-
-            $baris = DB::table('return_claim_lines as l')
-                ->join('loan_items as li', 'li.id', '=', 'l.loan_item_id')
-                ->where('l.claim_id', $id)
-                ->select('l.id', 'l.qty', 'li.item_id')
-                ->get()->keyBy('id');
-
-            $kirim = collect($d['baris'])->keyBy(fn ($b) => (int) $b['id']);
-
-            $a = $baris->keys()->map(fn ($k) => (int) $k)->sort()->values()->all();
-            $b = $kirim->keys()->sort()->values()->all();
-
-            if ($a !== $b) {
-                throw ValidationException::withMessages(['baris' => 'Semua baris klaim harus diverifikasi, tidak kurang dan tidak lebih.']);
-            }
-
-            $perItem = [];
-
-            foreach ($baris as $lineId => $line) {
-                $k = $kirim[(int) $lineId];
-
-                $jumlah = $k['qty_baik'] + $k['qty_rusak'] + $k['qty_hilang'] + $k['qty_ditolak'];
-
-                if ($jumlah !== (int) $line->qty) {
-                    throw ValidationException::withMessages([
-                        'baris' => "Baris #{$lineId}: jumlah keempat hasil ({$jumlah}) harus sama dengan qty klaim ({$line->qty}).",
-                    ]);
-                }
-
-                DB::table('return_claim_lines')->where('id', $lineId)->update([
-                    'qty_baik'    => $k['qty_baik'],
-                    'qty_rusak'   => $k['qty_rusak'],
-                    'qty_hilang'  => $k['qty_hilang'],
-                    'qty_ditolak' => $k['qty_ditolak'],
-                ]);
-
-                $p = &$perItem[$line->item_id];
-                $p['baik']    = ($p['baik']    ?? 0) + $k['qty_baik'];
-                // 'kondisi' = jumlah unit yang dikembalikan dalam kondisi rusak/perlu servis
-                $p['kondisi'] = ($p['kondisi'] ?? 0) + $k['qty_rusak'];
-                $p['hilang']  = ($p['hilang']  ?? 0) + $k['qty_hilang'];
-                unset($p);
-            }
-
-            ksort($perItem); // urutan kunci tetap, mencegah deadlock antar admin
-
-            foreach ($perItem as $itemId => $v) {
-                DB::table('items')->where('id', $itemId)->lockForUpdate()->first();
-
-                // Perbarui stok: baik kembali ke tersedia, rusak tambah kondisi, hilang kurangi total
-                DB::table('items')->where('id', $itemId)->incrementEach([
-                    'tersedia' => $v['baik'],
-                    'kondisi'  => $v['kondisi'],
-                    'total'    => -$v['hilang'],
-                ]);
-
-                $gerak = [
-                    ['VERIFIKASI_BAIK',   0,             $v['baik'],    0,             $v['baik']],
-                    ['VERIFIKASI_RUSAK',  0,             0,             $v['kondisi'], $v['kondisi']],
-                    ['VERIFIKASI_HILANG', -$v['hilang'], 0,             0,             $v['hilang']],
-                ];
-
-                foreach ($gerak as [$jenis, $dTotal, $dTersedia, $dRusak, $cek]) {
-                    if ($cek === 0) {
-                        continue;
-                    }
-
-                    DB::table('stock_movements')->insert([
-                        'item_id'        => $itemId,
-                        'jenis'          => $jenis,
-                        'delta_total'    => $dTotal,
-                        'delta_tersedia' => $dTersedia,
-                        'delta_rusak'    => $dRusak,   // kolom buku besar tetap delta_rusak
-                        'ref_tipe'       => 'klaim',
-                        'ref_id'         => $id,
-                        'user_id'        => $adminId,
-                        'catatan'        => 'Verifikasi pengembalian '.$klaim->kode_klaim,
-                    ]);
-                }
-            }
-
-            DB::table('return_claims')->where('id', $id)->update([
-                'status'            => 'diverifikasi',
-                'diverifikasi_oleh' => $adminId,
-                'diverifikasi_pada' => now(),
-                'catatan_admin'     => $d['catatan_admin'] ?? null,
-            ]);
-
-            DB::table('audit_logs')->insert([
-                'user_id'    => $adminId,
-                'aksi'       => 'klaim_verifikasi',
-                'entitas'    => 'klaim',
-                'entitas_id' => $id,
-                'detail'     => json_encode(['kode_klaim' => $klaim->kode_klaim, 'per_barang' => $perItem]),
-            ]);
-        });
+        return response()->json(['data' => $this->detail($id)]);
+    }
 
         return response()->json(['data' => $this->detail($id)]);
     }
