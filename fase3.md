@@ -24,12 +24,12 @@ Membangun antarmuka frontend **mode Kiosk** berbasis layar sentuh (tablet/PC kio
 ## 📦 Rincian Pekerjaan (Tasks)
 
 ### 1. Fondasi Frontend & Konfigurasi Kiosk
-- [ ] Setup Vue 3 + Vite di folder `frontend/` dengan Tailwind CSS.
-- [ ] Konfigurasi `frontend/vite.config.js`: setup reverse proxy meneruskan `/api` dan `/sanctum` ke backend backend port 8000.
-- [ ] Konfigurasi Axios client (`frontend/src/api/client.js`):
+- [x] Setup Vue 3 + Vite di folder `frontend/` dengan Tailwind CSS.
+- [x] Konfigurasi `frontend/vite.config.js`: setup reverse proxy meneruskan `/api` dan `/sanctum` ke backend backend port 8000.
+- [x] Konfigurasi Axios client (`frontend/src/services/api.js`):
   - `baseURL: '/api'`
   - `headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }`
-- [ ] Atur Vue Router (`frontend/src/router/index.js`) untuk alur rute publik mode Kiosk.
+- [x] Atur Vue Router (`frontend/src/router/index.js`) untuk alur rute publik mode Kiosk.
 
 ### 2. Komponen Dasar & Token Desain Kiosk
 - [ ] **`TombolBesar.vue`**: Tombol sentuh ramah jari dengan target sentuh tinggi minimal `h-14` (minimal 44 px), teks tebal, dan efek aktif/klik yang jelas.
@@ -79,9 +79,9 @@ Membangun antarmuka frontend **mode Kiosk** berbasis layar sentuh (tablet/PC kio
   - Alihkan (*redirect*) layar kembali ke beranda (`/`).
 
 ### 5. Keamanan Kode Pinjam di Kiosk (BR-18)
-- [ ] Kode pinjam **tidak boleh dicantumkan pada URL query string** (misal: dilarang `/cek?kode=PJM-123456`).
-- [ ] Lookup dikirim via HTTP POST body JSON ke `/api/kiosk/loans/lookup`.
-- [ ] Kode pinjam hanya disimpan dalam state memori sementara selama transaksi aktif.
+- [x] Kode pinjam **tidak boleh dicantumkan pada URL query string** (misal: dilarang `/cek?kode=PJM-123456`).
+- [x] Lookup dikirim via HTTP POST body JSON ke `/api/kiosk/loans/lookup` (atau `/api/kiosk/peminjaman/cek`).
+- [x] Kode pinjam hanya disimpan dalam state memori sementara selama transaksi aktif.
 
 ---
 

@@ -11,8 +11,8 @@ Dokumen rencana kerja terstruktur dari **Fase 0 hingga Fase 7** yang diturunkan 
 | **Fase 0** | Persiapan Lingkungan & Keputusan Awal | ✅ **SELESAI** | Infrastruktur, Git repo, backup awal, standarisasi setup. |
 | **Fase 1** | Fondasi Backend (Skema Database, Model & Auth) | ✅ **SELESAI** | 11 tabel domain + sistem, model, seeder, Sanctum SPA, Artisan commands. |
 | **Fase 2** | Inti Stok & Mesin Transaksi (ACID & Invarian) | ✅ **SELESAI** | TDD (U-01 s.d U-04), PeminjamanService, KlaimService, VerifikasiService. |
-| **Fase 3** | Frontend Kiosk (Layar Sentuh Peminjam) | ⏳ **PENDING** | UI katalog, form pinjam, lookup kode, klaim kembali, idle reset 60d. |
-| **Fase 4** | Panel Admin (Manajemen Data, Verifikasi & Dasbor) | ⏳ **PENDING** | Dasbor, master data, verifikasi fisik 4 kondisi, soft-delete aman. |
+| **Fase 3** | Frontend Kiosk (Layar Sentuh Peminjam) | 🔄 **SEBAGIAN** | Fondasi & transaksi jalan (View & Pengembalian), perapian komponen modular & idle reset pending. |
+| **Fase 4** | Panel Admin (Manajemen Data, Verifikasi & Dasbor) | 🔄 **SEBAGIAN** | Auth SPA admin & guard jalan, backend master data CRUD selesai, halaman barang dibuat. |
 | **Fase 5** | Laporan, Jejak Audit & Pengaturan (Titik MVP) | ⏳ **PENDING** | PDF server-side, audit logs, 8 setting kebijakan, tonggak MVP. |
 | **Fase 6** | Fitur Lanjutan (Booking, Perpanjangan, Koreksi, Bengkel) | ⏳ **PENDING** | Booking masa depan, perpanjangan mandiri/admin, afkir stok, ekspor CSV. |
 | **Fase 7** | Pengujian Penuh, Hardening, Dokumentasi & Rilis | ⏳ **PENDING** | UAT, benchmark 5.000 data, hardening keamanan, prosedur backup restore. |
@@ -136,11 +136,11 @@ Dokumen rencana kerja terstruktur dari **Fase 0 hingga Fase 7** yang diturunkan 
 ---
 
 ### 🖥️ Fase 3 – Frontend Kiosk (Layar Sentuh Peminjam)
-- [ ] **3.1 Fondasi Frontend & Konfigurasi Kiosk**:
-  - [ ] Setup Vue 3 + Tailwind CSS di folder `frontend/`.
-  - [ ] Proxy `/api` dan `/sanctum` di `vite.config.js`.
-  - [ ] Axios client konfigurasi base URL `/api`.
-  - [ ] Router Vue untuk alur rute publik mode Kiosk.
+- [x] **3.1 Fondasi Frontend & Konfigurasi Kiosk**:
+  - [x] Setup Vue 3 + Tailwind CSS di folder `frontend/`.
+  - [x] Proxy `/api` dan `/sanctum` di `vite.config.js`.
+  - [x] Axios client konfigurasi base URL `/api`.
+  - [x] Router Vue untuk alur rute publik mode Kiosk.
 - [ ] **3.2 Komponen Dasar Mode Layar Sentuh**:
   - [ ] `TombolBesar.vue`: Target sentuh besar (minimal tinggi 44 px).
   - [ ] `KartuBarang.vue`: Kartu informasi barang & indikator stok habis.
@@ -151,6 +151,7 @@ Dokumen rencana kerja terstruktur dari **Fase 0 hingga Fase 7** yang diturunkan 
   - [ ] `FormField.vue`, `ModalKonfirmasi.vue`, `NotifikasiToast.vue`.
   - [ ] `StrukCetak.vue`: CSS `@media print` untuk cetak struk bersih tanpa tombol navigasi.
 - [ ] **3.3 Halaman & Alur Pengguna Kiosk**:
+  *(Catatan: Logika peminjaman & klaim sudah berfungsi di `View.vue` & `Pengembalian.vue`, pemisahan rute per layar sesuai PRD masih pending)*
   - [ ] `/`: Beranda dengan 3 menu aksi utama.
   - [ ] `/katalog`: Pencarian barang, filter pill kategori, indikator stok habis.
   - [ ] `/pinjam`: Form peminjaman langsung (divisi, identitas, batas tanggal, UUID idempotensi).
@@ -161,25 +162,29 @@ Dokumen rencana kerja terstruktur dari **Fase 0 hingga Fase 7** yang diturunkan 
   - [ ] `/klaim/selesai`: Bukti kode `KMB-XXXXXX` dan petunjuk penyerahan fisik.
 - [ ] **3.4 Otomasi Kiosk**:
   - [ ] Idle Reset 60 Detik (`useIdleReset.js`): Reset form dan redirect ke `/` saat tanpa interaksi.
-  - [ ] Proteksi URL: Kode peminjaman dilarang tampil di query string browser (BR-18).
+  - [x] Proteksi URL: Kode peminjaman dilarang tampil di query string browser (BR-18).
 
 ---
 
 ### 🛡️ Fase 4 – Panel Admin (Manajemen Data, Verifikasi & Dasbor)
 - [ ] **4.1 Layout & Navigasi Admin**:
-  - [ ] `LayoutAdmin.vue`, `Sidebar.vue` (responsif drawer pada tablet/ponsel), `Navbar.vue`.
+  - [x] `LayoutAdmin.vue` (Layout dasar admin & navbar logout).
+  - [ ] `Sidebar.vue` (responsif drawer pada tablet/ponsel).
   - [ ] `TabelData.vue`, `FilterBar.vue`, `KartuAngka.vue`, `LiniMasa.vue`.
-- [ ] **4.2 Proteksi Autentikasi Frontend**:
-  - [ ] `/admin/login`: CSRF handshake, form kredensial, proteksi rate-limit.
-  - [ ] Vue Router Navigation Guard: Validasi sesi admin aktif pada rute `/admin/*`.
-  - [ ] Axios Interceptor: Tangani 401 / 419 dan tampilkan dialog sesi kedaluwarsa.
+- [x] **4.2 Proteksi Autentikasi Frontend**:
+  - [x] `/admin/login`: CSRF handshake, form kredensial, proteksi rate-limit.
+  - [x] Vue Router Navigation Guard: Validasi sesi admin aktif pada rute `/admin/*`.
+  - [x] Axios Interceptor: Tangani 401 / 419 dan tampilkan dialog sesi kedaluwarsa.
 - [ ] **4.3 Dasbor & Antrean Verifikasi**:
+  - [x] Backend API Antrean & Verifikasi klaim (`KlaimController@index`, `@verifikasi`).
   - [ ] `/admin`: 4 metrik utama (Dipinjam, Terlambat, Antrean Verifikasi, Stok Rusak) + auto-refresh tiap 30 detik.
   - [ ] `/admin/verifikasi`: Antrean klaim FIFO berstatus `menunggu`.
   - [ ] `/admin/verifikasi/:id`: Form cek fisik 4 kondisi (`qty_baik`, `qty_rusak`, `qty_hilang`, `qty_ditolak`), validasi selisih nol, dan catatan wajib admin.
 - [ ] **4.4 Manajemen Master Data**:
-  - [ ] `/admin/barang`: CRUD barang, modal penyesuaian stok manual (FR-13 M), soft-delete aman (tolak 409 jika sedang dipinjam).
-  - [ ] `/admin/kategori` & `/admin/divisi`: Tambah, edit, aktifkan/nonaktifkan entitas (tanpa hard delete).
+  - [x] Backend API: CRUD lengkap Barang, Kategori, dan Divisi (`ItemController`, `CategoryController`, `DivisionController`).
+  - [x] `/admin/barang`: CRUD barang di antarmuka admin (`Barang.vue`).
+  - [ ] Modal penyesuaian stok manual (FR-13 M), soft-delete aman (tolak 409 jika sedang dipinjam).
+  - [ ] `/admin/kategori` & `/admin/divisi`: Tambah, edit, aktifkan/nonaktifkan entitas (tanpa hard delete) di frontend.
 - [ ] **4.5 Manajemen Transaksi Peminjaman**:
   - [ ] `/admin/peminjaman`: Filter multi-kriteria, pencarian, paginasi.
   - [ ] `/admin/peminjaman/:id`: Detail peminjam, lini masa riwayat transaksi, rincian unit fisik.
@@ -210,7 +215,7 @@ Dokumen rencana kerja terstruktur dari **Fase 0 hingga Fase 7** yang diturunkan 
 ### 🚀 Fase 6 – Fitur Lanjutan (Pemesanan, Perpanjangan, Pembatalan, Koreksi & Bengkel)
 - [ ] **6.1 Pemesanan Barang (Booking) & Pembatalan (FR-03, FR-09)**:
   - [ ] Pemesanan masa depan (`tanggal_pinjam > hari_ini`), penahanan stok langsung, status `Dipesan`.
-  - [ ] Pembatalan mandiri peminjam (sebelum hari H).
+  - [x] Pembatalan mandiri peminjam via kiosk API (`POST /api/kiosk/peminjaman/batal` & `PeminjamanService::batal`).
   - [ ] Pembatalan oleh admin (sebelum ada klaim pengembalian fisik), kembalikan unit ke `tersedia`, catat `BATAL_PINJAM`.
 - [ ] **6.2 Perpanjangan Masa Peminjaman (FR-07, FR-08)**:
   - [ ] Perpanjangan mandiri kiosk: Validasi batas kuota (maks 2x), belum terlambat, flag `boleh_diperpanjang = 1`.
@@ -252,10 +257,6 @@ Dokumen rencana kerja terstruktur dari **Fase 0 hingga Fase 7** yang diturunkan 
 
 ## 📝 Catatan Pekerjaan Proyek (Work Log & Catatan Teknis)
 
-
-
-
-
 ### ⚠️ Catatan Penting & Pedoman Teknis Pengembang
 1. **Integritas Database**:
    - Database kerja utama: `inventaris_db`. Database pengujian otomatis: `inventaris_test`.
@@ -284,4 +285,22 @@ Dokumen rencana kerja terstruktur dari **Fase 0 hingga Fase 7** yang diturunkan 
   - Penyatuan seluruh dokumen perencanaan `fase0.md` hingga `fase7.md` ke dalam satu dokumen terpadu `todo.md`.
   - Penegasan kembali standarisasi kolom stok: menggunakan `kondisi` pada tabel `items` (kuantitas unit rusak fisik) dan `delta_kondisi` pada buku besar `stock_movements`.
   - Persiapan eksekusi TDD untuk Fase 2: menulis rangkaian pengujian unit dan konkurensi (U-01 s.d. U-04) sebelum implementasi service logika transaksi.
-
+* **2026-10-28 – Fase 2 (Inti Stok & Mesin Transaksi ACID) Selesai**:
+  - Implementasi `PeminjamanService`: mutasi stok atomic bersyarat (`UPDATE items SET tersedia = tersedia - :qty WHERE tersedia >= :qty`), penanganan kunci idempotensi UUID, dan penerbitan kode kriptografis `PJM-XXXXXX`.
+  - Implementasi `KlaimService`: pengajuan klaim mandiri parsial, kalkulasi unit sisa pinjam, pembekuan `hari_terlambat`, dan penerbitan kode `KMB-XXXXXX`.
+  - Implementasi `VerifikasiService`: verifikasi fisik 4 kondisi (`qty_baik`, `qty_rusak`, `qty_hilang`, `qty_ditolak`), mutasi buku besar `stock_movements`, dan penegakan rumus invarian BR-01.
+  - Implementasi `StatusPeminjaman`, helper `KodeAcak`, dan `Tanggal::hariIni()` konsisten zona `Asia/Jakarta`.
+  - Pembuatan perintah Artisan `php artisan inventaris:periksa-invarian`.
+  - Pengujian TDD lengkap: U-01 (persaingan konkurensi serentak), U-02 (idempotensi transaksi), U-03 (1.000 simulasi invarian BR-01), dan U-04 (atomic rollback transaksi gagal).
+* **2026-10-28 – Fase 3 (Frontend Kiosk) Sebagian Selesai**:
+  - Fondasi Vue 3 + Tailwind CSS + Pinia + Vue Router + Axios.
+  - Konfigurasi reverse proxy `/api` dan `/sanctum` di `vite.config.js`.
+  - Klien Axios terpusat dengan CSRF cookie handshake di `frontend/src/services/api.js`.
+  - Layar katalog & form peminjaman mandiri (`frontend/src/Kiosk/View.vue`): live search, filter kategori, keranjang belanja, form identitas peminjam, header `Idempotency-Key` UUID, dan proteksi anti klik ganda.
+  - Layar lookup & klaim pengembalian (`frontend/src/Kiosk/Pengembalian.vue`): lookup via POST body JSON (aman BR-18, tidak bocor di URL), penyembunyian privasi nomor telepon, form pelaporan kondisi fisik (baik, rusak, hilang) dibatasi sisa unit, serta penerbitan kode klaim `KMB-XXXXXX`.
+  - Endpoint pendukung kiosk backend: `KatalogController`, `PeminjamanController`, `CekPeminjamanController`, `PengembalianController`.
+* **2026-10-28 – Fase 4 & Fase 6 (Sebagian Selesai)**:
+  - Backend API CRUD lengkap untuk master data: Barang (`ItemController`), Kategori (`CategoryController`), Divisi (`DivisionController`).
+  - Frontend autentikasi admin: halaman `/admin/login`, Vue Router navigation guard proteksi rute admin, dan Axios interceptor penanganan error 401/419.
+  - Layout admin (`Layout.vue`), beranda admin (`Beranda.vue`), dan antarmuka manajemen barang (`Barang.vue`).
+  - Fitur pembatalan pemesanan kiosk (`POST /api/kiosk/peminjaman/batal` & `PeminjamanService::batal`).
